@@ -1,0 +1,109 @@
+name: CI — Eco-Smart Classifier
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  # ── 1. Lint ──────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (black · flake8 · isort)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install black flake8 isort
+
+      - name: black — formatage
+        run: black --check app/ scripts/ tests/
+
+      - name: isort — ordre des imports
+        run: isort --check-only app/ scripts/ tests/
+
+      - name: flake8 — style
+        run: flake8 app/ scripts/ tests/ --max-line-length=100 --ignore=E203,W503
+
+  # ── 2. Tests + Coverage ───────────────────────────────────────────────────────
+  tests:
+    name: Tests pytest (coverage ≥ 70%)
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+
+      - name: Télécharger les données NLTK
+        run: python -c "import nltk; nltk.download('stopwords')"
+
+      - name: Entraîner le modèle (nécessaire pour les tests modèle + API)
+        run: python scripts/train.py --data dataset_ProjetML_2026.csv
+
+      - name: Lancer les tests avec coverage
+        run: |
+          pytest tests/ \
+            --cov=app \
+            --cov=scripts \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=70 \
+            -v
+
+      - name: Upload coverage (Codecov)
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+
+  # ── 3. Build Docker ───────────────────────────────────────────────────────────
+  docker:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Entraîner le modèle (pour l'inclure dans l'image)
+        run: |
+          pip install -r requirements.txt
+          python -c "import nltk; nltk.download('stopwords')"
+          python scripts/train.py --data dataset_ProjetML_2026.csv
+
+      - name: Build de l'image Docker
+        run: docker build -t ecosmart-classifier:${{ github.sha }} .
+
+      - name: Test de l'endpoint /health
+        run: |
+          docker run -d --name test-api -p 8000:8000 \
+            ecosmart-classifier:${{ github.sha }}
+          sleep 20
+          curl --fail http://localhost:8000/health
+          docker stop test-api
+
+      # Décommenter pour pousser vers GitHub Container Registry
+      # - name: Login to GHCR
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
+      #
+      # - name: Push image
+      #   run: |
+      #     docker tag ecosmart-classifier:${{ github.sha }} \
+      #       ghcr.io/${{ github.repository_owner }}/ecosmart-classifier:latest
+      #     docker push ghcr.io/${{ github.repository_owner }}/ecosmart-classifier:latest

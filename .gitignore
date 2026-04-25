@@ -1,0 +1,35 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter artifacts
+.ipynb_checkpoints/
+
+# Flutter/Dart generated artifacts
+frontend_flutter/.dart_tool/
+frontend_flutter/build/
+
+# ML/experiment artifacts
+mlruns/
+outputs/
+
+# Local runtime logs
+*.log
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+
+# Trained model artifacts (generated)
+models/*.joblib
