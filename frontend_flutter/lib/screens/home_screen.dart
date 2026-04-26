@@ -4,18 +4,25 @@ import '../models/predict_models.dart';
 import '../services/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({
+    super.key,
+    required this.api,
+    this.onLogout,
+  });
+
+  final ApiService api;
+  final VoidCallback? onLogout;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _api = ApiService();
+  static const _primaryBlue = Color(0xFF000091);
+  static const _deepBlue = Color(0xFF001A6E);
 
-  final _usernameCtrl = TextEditingController(text: 'admin');
-  final _passwordCtrl = TextEditingController(text: 'admin');
+  final _formKey = GlobalKey<FormState>();
+  late final ApiService _api;
 
   final _poidsCtrl = TextEditingController(text: '25');
   final _volumeCtrl = TextEditingController(text: '50');
@@ -29,14 +36,11 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 
   bool _loading = false;
-  bool _authLoading = false;
   bool _dashboardLoading = false;
   bool _authenticated = false;
 
   String? _error;
-  String? _authError;
   String? _dashboardError;
-  String? _authInfo;
   String? _publicHealthStatus;
 
   Map<String, dynamic>? _dashboard;
@@ -45,13 +49,16 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _api = widget.api;
+    _authenticated = _api.isAuthenticated;
     _loadPublicHealth();
+    if (_authenticated) {
+      _loadDashboard();
+    }
   }
 
   @override
   void dispose() {
-    _usernameCtrl.dispose();
-    _passwordCtrl.dispose();
     _poidsCtrl.dispose();
     _volumeCtrl.dispose();
     _conductiviteCtrl.dispose();
@@ -73,64 +80,6 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _publicHealthStatus = 'indisponible');
-    }
-  }
-
-  Future<void> _login() async {
-    setState(() {
-      _authLoading = true;
-      _authError = null;
-      _authInfo = null;
-    });
-
-    try {
-      await _api.login(
-        username: _usernameCtrl.text.trim(),
-        password: _passwordCtrl.text,
-      );
-      if (!mounted) return;
-      setState(() {
-        _authenticated = true;
-        _authInfo = 'Connexion reussie.';
-      });
-      await _loadDashboard();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _authenticated = false;
-        _authError = e.toString();
-      });
-    } finally {
-      if (!mounted) return;
-      setState(() => _authLoading = false);
-    }
-  }
-
-  Future<void> _quickLogin() async {
-    setState(() {
-      _authLoading = true;
-      _authError = null;
-      _authInfo = null;
-    });
-
-    try {
-      final response = await _api.quickLogin();
-      if (!mounted) return;
-      setState(() {
-        _authenticated = true;
-        _authInfo =
-            'Connexion demo active: ${response['username']} / ${response['password']}';
-      });
-      await _loadDashboard();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _authenticated = false;
-        _authError = e.toString();
-      });
-    } finally {
-      if (!mounted) return;
-      setState(() => _authLoading = false);
     }
   }
 
@@ -191,11 +140,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _logout() {
     _api.logout();
+    widget.onLogout?.call();
     setState(() {
       _authenticated = false;
       _dashboard = null;
       _result = null;
-      _authInfo = 'Session fermee.';
     });
   }
 
@@ -206,261 +155,114 @@ class _HomeScreenState extends State<HomeScreen> {
     final metrics = (ml['metrics'] as Map<String, dynamic>?) ?? {};
     final recent = (_dashboard?['recent_predictions'] as List<dynamic>?) ?? [];
 
+    final isDesktop = MediaQuery.of(context).size.width >= 1080;
+
+    if (!_authenticated) {
+      return Scaffold(
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Card(
+              margin: const EdgeInsets.all(18),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Espace sécurisé',
+                      style:
+                          TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Ce dashboard nécessite une session active. Reviens à la page publique pour te connecter.',
+                      style: TextStyle(color: Color(0xFF475569), height: 1.4),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: widget.onLogout,
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text('Retour à l accueil public'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Eco-Smart Dashboard'),
-        actions: [
-          IconButton(
-            onPressed: _loadPublicHealth,
-            icon: const Icon(Icons.health_and_safety_outlined),
-            tooltip: 'Verifier etat API',
+      body: Stack(
+        children: [
+          const _DashboardBackground(),
+          SafeArea(
+            child: Form(
+              key: _formKey,
+              child: isDesktop
+                  ? Row(
+                      children: [
+                        _sideRail(),
+                        Expanded(
+                          child: _mainContent(summary, ml, metrics, recent),
+                        ),
+                      ],
+                    )
+                  : _mainContent(summary, ml, metrics, recent),
+            ),
           ),
         ],
       ),
-      body: Center(
+    );
+  }
+
+  Widget _mainContent(
+    Map<String, dynamic> summary,
+    Map<String, dynamic> ml,
+    Map<String, dynamic> metrics,
+    List<dynamic> recent,
+  ) {
+    return SingleChildScrollView(
+      child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _sectionCard(
-                    title: 'Connexion',
-                    subtitle:
-                        'API publique status: ${_publicHealthStatus ?? 'chargement...'}',
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _textField(_usernameCtrl, 'Username'),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _textField(_passwordCtrl, 'Password'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 8,
-                          children: [
-                            FilledButton.icon(
-                              onPressed: _authLoading ? null : _login,
-                              icon: const Icon(Icons.login),
-                              label: Text(
-                                _authLoading ? 'Connexion...' : 'Se connecter',
-                              ),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: _authLoading ? null : _quickLogin,
-                              icon: const Icon(Icons.bolt_outlined),
-                              label: const Text('Connexion demo immediate'),
-                            ),
-                            if (_authenticated)
-                              TextButton.icon(
-                                onPressed: _logout,
-                                icon: const Icon(Icons.logout),
-                                label: const Text('Se deconnecter'),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            _authenticated
-                                ? 'Statut: authentifie'
-                                : 'Statut: non authentifie',
-                            style: TextStyle(
-                              color: _authenticated
-                                  ? Colors.green.shade700
-                                  : Colors.orange.shade700,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        if (_authInfo != null)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              _authInfo!,
-                              style: const TextStyle(color: Colors.blueGrey),
-                            ),
-                          ),
-                        if (_authError != null)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              _authError!,
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _sectionCard(
-                    title: 'Tableau de bord',
-                    subtitle: 'KPIs operationnels et etat modele',
-                    trailing: IconButton(
-                      onPressed: (!_authenticated || _dashboardLoading)
-                          ? null
-                          : _loadDashboard,
-                      icon: const Icon(Icons.refresh),
-                      tooltip: 'Actualiser tableau de bord',
-                    ),
-                    child: !_authenticated
-                        ? const Text(
-                            'Connecte-toi pour charger le tableau de bord.',
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (_dashboardLoading)
-                                const LinearProgressIndicator(),
-                              if (_dashboardError != null)
-                                Text(
-                                  _dashboardError!,
-                                  style: const TextStyle(color: Colors.red),
-                                ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 12,
-                                runSpacing: 12,
-                                children: [
-                                  _metricCard(
-                                    title: 'Predictions',
-                                    value:
-                                        '${summary['predictions_count'] ?? 0}',
-                                    icon: Icons.analytics_outlined,
-                                  ),
-                                  _metricCard(
-                                    title: 'Success rate',
-                                    value: '${summary['success_rate'] ?? 0}%',
-                                    icon: Icons.check_circle_outline,
-                                  ),
-                                  _metricCard(
-                                    title: 'Modele',
-                                    value: (ml['model_ready'] == true)
-                                        ? 'Pret'
-                                        : 'Indisponible',
-                                    icon: Icons.model_training_outlined,
-                                  ),
-                                  _metricCard(
-                                    title: 'Accuracy',
-                                    value:
-                                        ((metrics['accuracy'] ?? '-')
-                                                .toString())
-                                            .substring(
-                                              0,
-                                              ((metrics['accuracy'] ?? '-')
-                                                          .toString()
-                                                          .length >=
-                                                      6)
-                                                  ? 6
-                                                  : (metrics['accuracy'] ?? '-')
-                                                        .toString()
-                                                        .length,
-                                            ),
-                                    icon: Icons.speed_outlined,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Dernieres predictions',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 8),
-                              if (recent.isEmpty)
-                                const Text('Aucune prediction enregistree.')
-                              else
-                                ...recent.map((item) {
-                                  final map = item as Map<String, dynamic>;
-                                  final response =
-                                      (map['response_payload']
-                                          as Map<String, dynamic>?);
-                                  return ListTile(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: const Icon(
-                                      Icons.insights_outlined,
-                                    ),
-                                    title: Text(
-                                      'Categorie: ${response?['categorie'] ?? '-'}',
-                                    ),
-                                    subtitle: Text(
-                                      'Date: ${map['created_at'] ?? '-'} | Status: ${map['ml_status_code'] ?? '-'}',
-                                    ),
-                                  );
-                                }),
-                            ],
-                          ),
-                  ),
-                  const SizedBox(height: 16),
-                  _sectionCard(
-                    title: 'Nouvelle prediction',
-                    subtitle: 'Saisie operationnelle des donnees de collecte',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            _field(_poidsCtrl, 'Poids'),
-                            _field(_volumeCtrl, 'Volume'),
-                            _field(_conductiviteCtrl, 'Conductivite'),
-                            _field(_opaciteCtrl, 'Opacite'),
-                            _field(_rigiditeCtrl, 'Rigidite'),
-                            _field(_prixCtrl, 'Prix_Revente'),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        _textField(_sourceCtrl, 'Source'),
-                        const SizedBox(height: 12),
-                        _textField(
-                          _rapportCtrl,
-                          'Rapport_Collecte',
-                          maxLines: 3,
-                        ),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: (_loading || !_authenticated)
-                              ? null
-                              : _submit,
-                          icon: const Icon(Icons.play_arrow_outlined),
-                          label: Text(_loading ? 'Prediction...' : 'Predire'),
-                        ),
-                        const SizedBox(height: 12),
-                        if (_error != null)
-                          Text(
-                            _error!,
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                        if (_result != null) ...[
-                          Text(
-                            'Categorie predite: ${_result!.categorie}',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 6),
-                          Text('Texte nettoye: ${_result!.texteClean}'),
-                          const SizedBox(height: 6),
-                          const Text('Probabilites'),
-                          ..._result!.probabilites.entries.map(
-                            (e) => Text(' - ${e.key}: ${e.value}'),
-                          ),
+          constraints: const BoxConstraints(maxWidth: 1280),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _header(summary),
+                const SizedBox(height: 14),
+                _kpiGrid(summary, ml, metrics),
+                const SizedBox(height: 14),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final wide = constraints.maxWidth > 940;
+                    if (wide) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 6, child: _predictionPanel()),
+                          const SizedBox(width: 14),
+                          Expanded(flex: 4, child: _systemPanel(ml, metrics)),
                         ],
+                      );
+                    }
+                    return Column(
+                      children: [
+                        _predictionPanel(),
+                        const SizedBox(height: 14),
+                        _systemPanel(ml, metrics),
                       ],
-                    ),
-                  ),
-                ],
-              ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+                _historyPanel(recent),
+              ],
             ),
           ),
         ),
@@ -468,94 +270,545 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _sectionCard({
-    required String title,
-    required String subtitle,
-    required Widget child,
-    Widget? trailing,
+  Widget _sideRail() {
+    return Container(
+      width: 240,
+      padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      gradient: const LinearGradient(
+                        colors: [_deepBlue, _primaryBlue],
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'FR',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'EcoSmart\nOps Center',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              const _NavItem(
+                  icon: Icons.dashboard_outlined, label: 'Vue générale'),
+              const _NavItem(icon: Icons.tune_outlined, label: 'Prédiction'),
+              const _NavItem(icon: Icons.history_outlined, label: 'Historique'),
+              const _NavItem(icon: Icons.memory_outlined, label: 'Santé ML'),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: const Color(0xFFF4F6FF),
+                ),
+                child: Text(
+                  'API: ${_publicHealthStatus ?? 'chargement...'}',
+                  style: const TextStyle(
+                    color: Color(0xFF1E3A8A),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _logout,
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Déconnexion'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header(Map<String, dynamic> summary) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF001A6E), Color(0xFF0A2EA6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x29001A6E),
+            blurRadius: 20,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Cockpit opérationnel',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Nouvelle disposition orientée pilotage : indicateurs en haut, actions au centre, suivi en bas.',
+                  style: TextStyle(
+                    color: Color(0xFFDCE7FF),
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              FilledButton.icon(
+                onPressed: _dashboardLoading ? null : _loadDashboard,
+                icon: const Icon(Icons.sync),
+                label: const Text('Actualiser'),
+              ),
+              const SizedBox(height: 8),
+              _badge(
+                  'Dernière activité: ${summary['last_prediction_at'] ?? '-'}'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kpiGrid(
+    Map<String, dynamic> summary,
+    Map<String, dynamic> ml,
+    Map<String, dynamic> metrics,
+  ) {
+    final cards = [
+      _kpiCard(
+        label: 'Prédictions',
+        value: '${summary['predictions_count'] ?? 0}',
+        delta: 'Total cumulé',
+        icon: Icons.insights_outlined,
+      ),
+      _kpiCard(
+        label: 'Taux de succès',
+        value: '${summary['success_rate'] ?? 0}%',
+        delta: 'Requêtes 2xx',
+        icon: Icons.verified_outlined,
+      ),
+      _kpiCard(
+        label: 'État modèle',
+        value: ml['model_ready'] == true ? 'Prêt' : 'Indisponible',
+        delta: 'Pipeline ML',
+        icon: Icons.model_training_outlined,
+      ),
+      _kpiCard(
+        label: 'Accuracy',
+        value: _shortMetric(metrics['accuracy']),
+        delta: 'Métrique globale',
+        icon: Icons.speed_outlined,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final perRow = constraints.maxWidth > 1100
+            ? 4
+            : constraints.maxWidth > 720
+                ? 2
+                : 1;
+        final width = (constraints.maxWidth - (12 * (perRow - 1))) / perRow;
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children:
+              cards.map((card) => SizedBox(width: width, child: card)).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _kpiCard({
+    required String label,
+    required String value,
+    required String delta,
+    required IconData icon,
   }) {
     return Card(
-      elevation: 1.5,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8EDFF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: _deepBlue),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(color: Color(0xFF475569))),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    delta,
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _predictionPanel() {
+    return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
+            const Text(
+              'Centre de prédiction',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Saisissez un bordereau puis lancez la classification.',
+              style: TextStyle(color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(color: Colors.black54),
-                      ),
-                    ],
-                  ),
-                ),
-                if (trailing != null) trailing,
+                _numericField(_poidsCtrl, 'Poids'),
+                _numericField(_volumeCtrl, 'Volume'),
+                _numericField(_conductiviteCtrl, 'Conductivité'),
+                _numericField(_opaciteCtrl, 'Opacité'),
+                _numericField(_rigiditeCtrl, 'Rigidité'),
+                _numericField(_prixCtrl, 'Prix revente'),
               ],
             ),
-            const SizedBox(height: 12),
-            child,
+            const SizedBox(height: 10),
+            _textField(_sourceCtrl, 'Source'),
+            const SizedBox(height: 10),
+            _textField(_rapportCtrl, 'Rapport collecte', maxLines: 3),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: _loading ? null : _submit,
+              icon: const Icon(Icons.play_arrow_outlined),
+              label:
+                  Text(_loading ? 'Classification...' : 'Lancer la prédiction'),
+            ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_error!, style: const TextStyle(color: Colors.red)),
+              ),
+            if (_result != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8EDFF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Catégorie prédite: ${_result!.categorie}',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('Texte nettoyé: ${_result!.texteClean}'),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Probabilités',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    ..._result!.probabilites.entries.map(
+                      (entry) => Text('• ${entry.key}: ${entry.value}'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _metricCard({
-    required String title,
-    required String value,
-    required IconData icon,
-  }) {
-    return SizedBox(
-      width: 220,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          color: const Color(0xFFF3F8F6),
-          border: Border.all(color: const Color(0xFFD9E8E3)),
-        ),
-        child: Row(
+  Widget _systemPanel(Map<String, dynamic> ml, Map<String, dynamic> metrics) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: const Color(0xFF0B8A6F)),
-            const SizedBox(width: 10),
-            Expanded(
+            const Text(
+              'Supervision système',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'État API, disponibilité modèle et signaux de qualité.',
+              style: TextStyle(color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 14),
+            _statusRow(
+              title: 'API Backend',
+              value: _publicHealthStatus ?? 'chargement...',
+              ok: (_publicHealthStatus ?? '').toLowerCase() == 'ok',
+            ),
+            _statusRow(
+              title: 'Modèle ML',
+              value: ml['model_ready'] == true ? 'prêt' : 'indisponible',
+              ok: ml['model_ready'] == true,
+            ),
+            _statusRow(
+              title: 'Accuracy',
+              value: _shortMetric(metrics['accuracy']),
+              ok: true,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFDCE2F6)),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(color: Colors.black54)),
-                  const SizedBox(height: 2),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  const Text(
+                    'Métriques modèle',
+                    style: TextStyle(fontWeight: FontWeight.w700),
                   ),
+                  const SizedBox(height: 8),
+                  Text('Precision: ${_shortMetric(metrics['precision'])}'),
+                  Text('Recall: ${_shortMetric(metrics['recall'])}'),
+                  Text('F1: ${_shortMetric(metrics['f1'])}'),
                 ],
               ),
             ),
+            if (_dashboardLoading) ...[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator(),
+            ],
+            if (_dashboardError != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _dashboardError!,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _field(TextEditingController controller, String label) {
+  Widget _historyPanel(List<dynamic> recent) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Flux des dernières prédictions',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Timeline des opérations exécutées par la session courante.',
+              style: TextStyle(color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 12),
+            if (recent.isEmpty)
+              const Text('Aucune opération récente.')
+            else
+              ...recent.take(12).map((item) {
+                final map = item as Map<String, dynamic>;
+                final response =
+                    map['response_payload'] as Map<String, dynamic>?;
+                final ok = (map['ml_status_code'] ?? 500) < 300;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFDCE2F6)),
+                    color: Colors.white,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: ok
+                              ? const Color(0xFFE8FAEE)
+                              : const Color(0xFFFFECEB),
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          ok ? Icons.check : Icons.error_outline,
+                          size: 16,
+                          color: ok
+                              ? const Color(0xFF166534)
+                              : const Color(0xFFB91C1C),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Catégorie: ${response?['categorie'] ?? '-'}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Date: ${map['created_at'] ?? '-'}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        'HTTP ${map['ml_status_code'] ?? '-'}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusRow({
+    required String title,
+    required String value,
+    required bool ok,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(
+            ok ? Icons.check_circle : Icons.cancel_outlined,
+            color: ok ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Text(value),
+        ],
+      ),
+    );
+  }
+
+  Widget _badge(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: const Color(0x33214BFF),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  String _shortMetric(dynamic value) {
+    final text = (value ?? '-').toString();
+    if (text.length <= 7) return text;
+    return text.substring(0, 7);
+  }
+
+  Widget _numericField(TextEditingController controller, String label) {
     return SizedBox(
-      width: 200,
+      width: 190,
       child: _textField(controller, label, keyboardType: TextInputType.number),
     );
   }
@@ -570,10 +823,7 @@ class _HomeScreenState extends State<HomeScreen> {
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: InputDecoration(labelText: label),
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
           return 'Champ requis';
@@ -584,6 +834,83 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         return null;
       },
+    );
+  }
+}
+
+class _DashboardBackground extends StatelessWidget {
+  const _DashboardBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFF6F8FF), Color(0xFFEEF2FF), Color(0xFFF8FAFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -120,
+            right: -80,
+            child: Container(
+              width: 320,
+              height: 320,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0x14214BFF),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -130,
+            left: -70,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0x12000091),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: const Color(0xFFF8FAFF),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF334155)),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF334155),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
