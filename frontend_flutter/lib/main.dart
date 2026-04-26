@@ -77,6 +77,7 @@ class _EcoSmartAppState extends State<EcoSmartApp> {
     switch (_view) {
       case AppView.public:
         currentScreen = PublicLandingScreen(
+          api: _api,
           onLoginPressed: () => setState(() => _view = AppView.login),
           onSignupPressed: () => setState(() => _view = AppView.signup),
           onQuickAccess: _quickAccess,

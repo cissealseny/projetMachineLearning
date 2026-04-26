@@ -6,8 +6,8 @@ import '../models/predict_models.dart';
 
 class ApiService {
   ApiService({http.Client? client, String? baseUrl})
-    : _client = client ?? http.Client(),
-      _baseUrl = baseUrl ?? 'http://127.0.0.1:9000/api';
+      : _client = client ?? http.Client(),
+        _baseUrl = baseUrl ?? 'http://127.0.0.1:9000/api';
 
   final http.Client _client;
   final String _baseUrl;
@@ -125,6 +125,17 @@ class ApiService {
     }
     throw Exception(
       'History fetch failed: ${response.statusCode} ${response.body}',
+    );
+  }
+
+  Future<Map<String, dynamic>> publicTunisiaDashboard() async {
+    final uri = Uri.parse('$_baseUrl/public/tunisia-dashboard/');
+    final response = await _client.get(uri);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(
+      'Public dashboard fetch failed: ${response.statusCode} ${response.body}',
     );
   }
 }

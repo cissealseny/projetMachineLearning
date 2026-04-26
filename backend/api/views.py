@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import PredictionLog
+from .models import CollectionPoint, GovernorateStat, PredictionLog
 from .serializers import (
     BatchPredictRequestSerializer,
     PredictionLogSerializer,
@@ -55,6 +55,81 @@ class InfoView(APIView):
                 {"detail": f"ML API unreachable: {exc}"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+
+
+class PublicTunisiaDashboardView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        points = list(
+            CollectionPoint.objects.filter(is_active=True).values(
+                "site", "governorate", "lat", "lng"
+            )
+        )
+        governorates = list(
+            GovernorateStat.objects.filter(is_active=True).values(
+                "name", "monthly_tons", "recovery_rate"
+            )
+        )
+
+        if not points:
+            points = [
+                {
+                    "site": "Tunis Centre",
+                    "governorate": "Tunis",
+                    "lat": 36.8065,
+                    "lng": 10.1815,
+                },
+                {
+                    "site": "Lac 1",
+                    "governorate": "Tunis",
+                    "lat": 36.8453,
+                    "lng": 10.2729,
+                },
+                {
+                    "site": "Sfax Ville",
+                    "governorate": "Sfax",
+                    "lat": 34.7406,
+                    "lng": 10.7603,
+                },
+                {
+                    "site": "Sousse Medina",
+                    "governorate": "Sousse",
+                    "lat": 35.8256,
+                    "lng": 10.6084,
+                },
+                {
+                    "site": "Bizerte Port",
+                    "governorate": "Bizerte",
+                    "lat": 37.2746,
+                    "lng": 9.8739,
+                },
+                {
+                    "site": "Gabes Nord",
+                    "governorate": "Gabes",
+                    "lat": 33.8815,
+                    "lng": 10.0982,
+                },
+            ]
+
+        if not governorates:
+            governorates = [
+                {"name": "Tunis", "monthly_tons": 1280, "recovery_rate": 74},
+                {"name": "Sfax", "monthly_tons": 1090, "recovery_rate": 69},
+                {"name": "Sousse", "monthly_tons": 980, "recovery_rate": 66},
+                {"name": "Nabeul", "monthly_tons": 860, "recovery_rate": 63},
+                {"name": "Bizerte", "monthly_tons": 720, "recovery_rate": 58},
+                {"name": "Gabes", "monthly_tons": 640, "recovery_rate": 55},
+            ]
+
+        payload = {
+            "country": "Tunisia",
+            "collection_points": points,
+            "governorate_stats": governorates,
+            "source": "ecosmart-public-api",
+        }
+
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class PredictView(APIView):
