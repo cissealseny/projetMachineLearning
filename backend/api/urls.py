@@ -1,4 +1,5 @@
 from django.urls import path
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .views import (
     DashboardView,
@@ -9,10 +10,16 @@ from .views import (
     PredictionHistoryView,
     PredictBatchView,
     PredictView,
+    RegisterView,
 )
 
 urlpatterns = [
+    # Auth
+    path("auth/login/", TokenObtainPairView.as_view(), name="login"),
+    path("auth/register/", RegisterView.as_view(), name="register"),
+    path("auth/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
     path("auth/dev-quick-login/", DevQuickLoginView.as_view(), name="dev-quick-login"),
+    # API
     path("health/", HealthView.as_view(), name="health"),
     path("info/", InfoView.as_view(), name="info"),
     path("public/tunisia-dashboard/", PublicTunisiaDashboardView.as_view(), name="public-tunisia-dashboard"),

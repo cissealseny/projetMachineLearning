@@ -59,7 +59,18 @@ class _EcoSmartAppState extends State<EcoSmartApp> {
     String username,
     String password,
   ) async {
-    return 'Inscription API bientôt disponible. Utilisez Accès démo ou un compte existant.';
+    try {
+      await _api.register(
+        username: username,
+        password: password,
+        email: email,
+      );
+      if (!mounted) return null;
+      setState(() => _view = AppView.private);
+      return null;
+    } catch (error) {
+      return _asReadableError(error);
+    }
   }
 
   void _logout() {

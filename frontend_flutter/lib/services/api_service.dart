@@ -7,7 +7,7 @@ import '../models/predict_models.dart';
 class ApiService {
   ApiService({http.Client? client, String? baseUrl})
       : _client = client ?? http.Client(),
-        _baseUrl = baseUrl ?? 'http://127.0.0.1:9000/api';
+        _baseUrl = baseUrl ?? 'http://127.0.0.1:8000/api';
 
   final http.Client _client;
   final String _baseUrl;
@@ -33,7 +33,7 @@ class ApiService {
     required String username,
     required String password,
   }) async {
-    final uri = Uri.parse('$_baseUrl/auth/token/');
+    final uri = Uri.parse('$_baseUrl/auth/login/');
     final response = await _client.post(
       uri,
       headers: {'Content-Type': 'application/json'},
@@ -51,6 +51,36 @@ class ApiService {
     }
 
     throw Exception('Login failed: ${response.statusCode} ${response.body}');
+  }
+
+  Future<void> register({
+    required String username,
+    required String password,
+    required String email,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/auth/register/');
+    final response = await _client.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'username': username,
+        'password': password,
+        'email': email,
+      }),
+    );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final token = (json['access'] ?? '').toString();
+      if (token.isEmpty) {
+        throw Exception('Access token manquant dans la reponse.');
+      }
+      _accessToken = token;
+      return;
+    }
+
+    throw Exception(
+        'Inscription failed: ${response.statusCode} ${response.body}');
   }
 
   Future<Map<String, dynamic>> quickLogin({

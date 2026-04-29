@@ -279,3 +279,38 @@ class DevQuickLoginView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class RegisterView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        username = request.data.get("username", "").strip()
+        password = request.data.get("password", "").strip()
+        email = request.data.get("email", "").strip()
+
+        if not username or not password:
+            return Response(
+                {"detail": "Username et password requis."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user_model = get_user_model()
+        if user_model.objects.filter(username=username).exists():
+            return Response(
+                {"detail": "Ce nom d'utilisateur existe déjà."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = user_model.objects.create_user(
+            username=username, password=password, email=email
+        )
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "username": username,
+            },
+            status=status.HTTP_201_CREATED,
+        )
