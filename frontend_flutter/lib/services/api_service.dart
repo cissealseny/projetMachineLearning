@@ -7,7 +7,7 @@ import '../models/predict_models.dart';
 class ApiService {
   ApiService({http.Client? client, String? baseUrl})
       : _client = client ?? http.Client(),
-        _baseUrl = baseUrl ?? 'http://127.0.0.1:8000/api';
+        _baseUrl = baseUrl ?? 'http://127.0.0.1:8001/api';
 
   final http.Client _client;
   final String _baseUrl;

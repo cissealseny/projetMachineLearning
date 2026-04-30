@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/predict_models.dart';
@@ -24,12 +25,22 @@ class _HomeScreenState extends State<HomeScreen> {
   final _formKey = GlobalKey<FormState>();
   late final ApiService _api;
 
-  final _poidsCtrl = TextEditingController(text: '25');
-  final _volumeCtrl = TextEditingController(text: '50');
-  final _conductiviteCtrl = TextEditingController(text: '3.5');
-  final _opaciteCtrl = TextEditingController(text: '0.7');
-  final _rigiditeCtrl = TextEditingController(text: '4.2');
-  final _prixCtrl = TextEditingController(text: '12');
+  // Sliders values
+  double _poids = 25;
+  double _volume = 50;
+  double _conductivite = 3.5;
+  double _opacite = 0.7;
+  double _rigidite = 4.2;
+  double _prix = 12;
+
+  // Text controllers pour saisie manuelle
+  late TextEditingController _poidsTextCtrl;
+  late TextEditingController _volumeTextCtrl;
+  late TextEditingController _conductiviteTextCtrl;
+  late TextEditingController _opaciteTextCtrl;
+  late TextEditingController _rigiditeTextCtrl;
+  late TextEditingController _prixTextCtrl;
+
   final _sourceCtrl = TextEditingController(text: 'Usine_A');
   final _rapportCtrl = TextEditingController(
     text: 'Lot de plastique recupere a l usine A.',
@@ -46,31 +57,57 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _dashboard;
   PredictResponse? _result;
 
+  Timer? _debounce;
+
   @override
   void initState() {
     super.initState();
     _api = widget.api;
     _authenticated = _api.isAuthenticated;
+
+    _poidsTextCtrl = TextEditingController(text: _poids.toStringAsFixed(1));
+    _volumeTextCtrl = TextEditingController(text: _volume.toStringAsFixed(1));
+    _conductiviteTextCtrl = TextEditingController(text: _conductivite.toStringAsFixed(1));
+    _opaciteTextCtrl = TextEditingController(text: _opacite.toStringAsFixed(1));
+    _rigiditeTextCtrl = TextEditingController(text: _rigidite.toStringAsFixed(1));
+    _prixTextCtrl = TextEditingController(text: _prix.toStringAsFixed(1));
+
     _loadPublicHealth();
     if (_authenticated) {
       _loadDashboard();
+      _submitAuto();
     }
   }
 
   @override
   void dispose() {
-    _poidsCtrl.dispose();
-    _volumeCtrl.dispose();
-    _conductiviteCtrl.dispose();
-    _opaciteCtrl.dispose();
-    _rigiditeCtrl.dispose();
-    _prixCtrl.dispose();
+    _poidsTextCtrl.dispose();
+    _volumeTextCtrl.dispose();
+    _conductiviteTextCtrl.dispose();
+    _opaciteTextCtrl.dispose();
+    _rigiditeTextCtrl.dispose();
+    _prixTextCtrl.dispose();
     _sourceCtrl.dispose();
     _rapportCtrl.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
-  double? _toDouble(String value) => double.tryParse(value);
+  void _onSliderChanged(double value, Function(double) setter, TextEditingController ctrl) {
+    setState(() => setter(value));
+    ctrl.text = value.toStringAsFixed(1);
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 600), _submitAuto);
+  }
+
+  void _onTextChanged(String text, double min, double max, Function(double) setter) {
+    final parsed = double.tryParse(text);
+    if (parsed != null && parsed >= min && parsed <= max) {
+      setState(() => setter(parsed));
+      _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 600), _submitAuto);
+    }
+  }
 
   Future<void> _loadPublicHealth() async {
     try {
@@ -85,12 +122,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadDashboard() async {
     if (!_authenticated) return;
-
     setState(() {
       _dashboardLoading = true;
       _dashboardError = null;
     });
-
     try {
       final data = await _api.dashboard();
       if (!mounted) return;
@@ -104,31 +139,26 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-
+  Future<void> _submitAuto() async {
+    if (!_authenticated) return;
     setState(() {
       _loading = true;
       _error = null;
-      _result = null;
     });
-
     try {
       final request = PredictRequest(
-        poids: _toDouble(_poidsCtrl.text)!,
-        volume: _toDouble(_volumeCtrl.text)!,
-        conductivite: _toDouble(_conductiviteCtrl.text)!,
-        opacite: _toDouble(_opaciteCtrl.text)!,
-        rigidite: _toDouble(_rigiditeCtrl.text)!,
-        prixRevente: _toDouble(_prixCtrl.text)!,
+        poids: _poids,
+        volume: _volume,
+        conductivite: _conductivite,
+        opacite: _opacite,
+        rigidite: _rigidite,
+        prixRevente: _prix,
         source: _sourceCtrl.text.trim(),
         rapportCollecte: _rapportCtrl.text.trim(),
       );
-
       final response = await _api.predict(request);
       if (!mounted) return;
       setState(() => _result = response);
-      await _loadDashboard();
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
@@ -154,7 +184,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final ml = (_dashboard?['ml'] as Map<String, dynamic>?) ?? {};
     final metrics = (ml['metrics'] as Map<String, dynamic>?) ?? {};
     final recent = (_dashboard?['recent_predictions'] as List<dynamic>?) ?? [];
-
     final isDesktop = MediaQuery.of(context).size.width >= 1080;
 
     if (!_authenticated) {
@@ -170,14 +199,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Espace sécurisé',
-                      style:
-                          TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-                    ),
+                    const Text('Espace sécurisé',
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     const Text(
-                      'Ce dashboard nécessite une session active. Reviens à la page publique pour te connecter.',
+                      'Ce dashboard nécessite une session active.',
                       style: TextStyle(color: Color(0xFF475569), height: 1.4),
                     ),
                     const SizedBox(height: 16),
@@ -203,14 +229,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Form(
               key: _formKey,
               child: isDesktop
-                  ? Row(
-                      children: [
-                        _sideRail(),
-                        Expanded(
-                          child: _mainContent(summary, ml, metrics, recent),
-                        ),
-                      ],
-                    )
+                  ? Row(children: [
+                      _sideRail(),
+                      Expanded(child: _mainContent(summary, ml, metrics, recent)),
+                    ])
                   : _mainContent(summary, ml, metrics, recent),
             ),
           ),
@@ -238,28 +260,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 14),
                 _kpiGrid(summary, ml, metrics),
                 const SizedBox(height: 14),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final wide = constraints.maxWidth > 940;
-                    if (wide) {
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 6, child: _predictionPanel()),
-                          const SizedBox(width: 14),
-                          Expanded(flex: 4, child: _systemPanel(ml, metrics)),
-                        ],
-                      );
-                    }
-                    return Column(
+                LayoutBuilder(builder: (context, constraints) {
+                  final wide = constraints.maxWidth > 940;
+                  if (wide) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _predictionPanel(),
-                        const SizedBox(height: 14),
-                        _systemPanel(ml, metrics),
+                        Expanded(flex: 6, child: _predictionPanel()),
+                        const SizedBox(width: 14),
+                        Expanded(flex: 4, child: _systemPanel(ml, metrics)),
                       ],
                     );
-                  },
-                ),
+                  }
+                  return Column(children: [
+                    _predictionPanel(),
+                    const SizedBox(height: 14),
+                    _systemPanel(ml, metrics),
+                  ]);
+                }),
                 const SizedBox(height: 14),
                 _historyPanel(recent),
               ],
@@ -267,6 +285,216 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _predictionPanel() {
+    Color categoryColor = const Color(0xFF000091);
+    if (_result != null) {
+      switch (_result!.categorie.toLowerCase()) {
+        case 'plastique':
+          categoryColor = Colors.blue;
+          break;
+        case 'métal':
+        case 'metal':
+          categoryColor = Colors.grey.shade700;
+          break;
+        case 'verre':
+          categoryColor = Colors.teal;
+          break;
+        case 'papier':
+          categoryColor = Colors.orange;
+          break;
+      }
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Centre de prédiction',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text(
+              'Bougez les curseurs ou saisissez une valeur — la catégorie se met à jour en temps réel.',
+              style: TextStyle(color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 16),
+
+            // Résultat temps réel
+            if (_loading)
+              const Center(child: CircularProgressIndicator())
+            else if (_result != null) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: categoryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: categoryColor.withOpacity(0.4)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.category_outlined, color: categoryColor, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Catégorie prédite',
+                            style: TextStyle(color: categoryColor, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _result!.categorie,
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: categoryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ..._result!.probabilites.entries.map((entry) {
+                      final pct = (entry.value * 100).toStringAsFixed(1);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(entry.key,
+                                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                                Text('$pct%'),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            LinearProgressIndicator(
+                              value: entry.value,
+                              backgroundColor: const Color(0xFFE2E8F0),
+                              color: categoryColor,
+                              minHeight: 6,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Sliders avec saisie manuelle
+            _sliderField('Poids (kg)', _poids, 0, 200, _poidsTextCtrl,
+                (v) => _onSliderChanged(v, (x) => _poids = x, _poidsTextCtrl),
+                (v) => _onTextChanged(v, 0, 200, (x) => _poids = x)),
+            _sliderField('Volume (L)', _volume, 0, 200, _volumeTextCtrl,
+                (v) => _onSliderChanged(v, (x) => _volume = x, _volumeTextCtrl),
+                (v) => _onTextChanged(v, 0, 200, (x) => _volume = x)),
+            _sliderField('Conductivité', _conductivite, 0, 10, _conductiviteTextCtrl,
+                (v) => _onSliderChanged(v, (x) => _conductivite = x, _conductiviteTextCtrl),
+                (v) => _onTextChanged(v, 0, 10, (x) => _conductivite = x)),
+            _sliderField('Opacité', _opacite, 0, 1, _opaciteTextCtrl,
+                (v) => _onSliderChanged(v, (x) => _opacite = x, _opaciteTextCtrl),
+                (v) => _onTextChanged(v, 0, 1, (x) => _opacite = x)),
+            _sliderField('Rigidité', _rigidite, 0, 10, _rigiditeTextCtrl,
+                (v) => _onSliderChanged(v, (x) => _rigidite = x, _rigiditeTextCtrl),
+                (v) => _onTextChanged(v, 0, 10, (x) => _rigidite = x)),
+            _sliderField('Prix revente', _prix, 0, 100, _prixTextCtrl,
+                (v) => _onSliderChanged(v, (x) => _prix = x, _prixTextCtrl),
+                (v) => _onTextChanged(v, 0, 100, (x) => _prix = x)),
+
+            const SizedBox(height: 10),
+            _textField(_sourceCtrl, 'Source'),
+            const SizedBox(height: 10),
+            _textField(_rapportCtrl, 'Rapport collecte', maxLines: 2),
+
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_error!, style: const TextStyle(color: Colors.red)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sliderField(
+    String label,
+    double value,
+    double min,
+    double max,
+    TextEditingController ctrl,
+    ValueChanged<double> onSliderChanged,
+    ValueChanged<String> onTextChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+              SizedBox(
+                width: 90,
+                height: 36,
+                child: TextFormField(
+                  controller: ctrl,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF000091)),
+                    ),
+                  ),
+                  onChanged: onTextChanged,
+                ),
+              ),
+            ],
+          ),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: const Color(0xFF000091),
+              thumbColor: const Color(0xFF000091),
+              inactiveTrackColor: const Color(0xFFDCE2F6),
+              overlayColor: const Color(0x29000091),
+              trackHeight: 4,
+            ),
+            child: Slider(
+              value: value.clamp(min, max),
+              min: min,
+              max: max,
+              onChanged: onSliderChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _textField(
+    TextEditingController controller,
+    String label, {
+    int maxLines = 1,
+  }) {
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      decoration: InputDecoration(labelText: label),
+      onChanged: (_) {
+        _debounce?.cancel();
+        _debounce = Timer(const Duration(milliseconds: 800), _submitAuto);
+      },
     );
   }
 
@@ -287,34 +515,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     height: 40,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
-                      gradient: const LinearGradient(
-                        colors: [_deepBlue, _primaryBlue],
-                      ),
+                      gradient: const LinearGradient(colors: [_deepBlue, _primaryBlue]),
                     ),
                     alignment: Alignment.center,
-                    child: const Text(
-                      'FR',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                    child: const Text('FR',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
                   ),
                   const SizedBox(width: 10),
                   const Expanded(
-                    child: Text(
-                      'EcoSmart\nOps Center',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        height: 1.2,
-                      ),
-                    ),
+                    child: Text('EcoSmart\nOps Center',
+                        style: TextStyle(fontWeight: FontWeight.w800, height: 1.2)),
                   ),
                 ],
               ),
               const SizedBox(height: 18),
-              const _NavItem(
-                  icon: Icons.dashboard_outlined, label: 'Vue générale'),
+              const _NavItem(icon: Icons.dashboard_outlined, label: 'Vue générale'),
               const _NavItem(icon: Icons.tune_outlined, label: 'Prédiction'),
               const _NavItem(icon: Icons.history_outlined, label: 'Historique'),
               const _NavItem(icon: Icons.memory_outlined, label: 'Santé ML'),
@@ -327,10 +542,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Text(
                   'API: ${_publicHealthStatus ?? 'chargement...'}',
-                  style: const TextStyle(
-                    color: Color(0xFF1E3A8A),
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: const TextStyle(color: Color(0xFF1E3A8A), fontWeight: FontWeight.w700),
                 ),
               ),
               const SizedBox(height: 10),
@@ -359,11 +571,7 @@ class _HomeScreenState extends State<HomeScreen> {
           end: Alignment.bottomRight,
         ),
         boxShadow: const [
-          BoxShadow(
-            color: Color(0x29001A6E),
-            blurRadius: 20,
-            offset: Offset(0, 10),
-          ),
+          BoxShadow(color: Color(0x29001A6E), blurRadius: 20, offset: Offset(0, 10))
         ],
       ),
       padding: const EdgeInsets.all(20),
@@ -373,22 +581,16 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Cockpit opérationnel',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 30,
-                    fontWeight: FontWeight.w800,
-                    height: 1.1,
-                  ),
-                ),
+                Text('Cockpit opérationnel',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1)),
                 SizedBox(height: 8),
                 Text(
-                  'Nouvelle disposition orientée pilotage : indicateurs en haut, actions au centre, suivi en bas.',
-                  style: TextStyle(
-                    color: Color(0xFFDCE7FF),
-                    height: 1.45,
-                  ),
+                  'Prédiction en temps réel — bougez les curseurs ou saisissez les valeurs.',
+                  style: TextStyle(color: Color(0xFFDCE7FF), height: 1.45),
                 ),
               ],
             ),
@@ -403,8 +605,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: const Text('Actualiser'),
               ),
               const SizedBox(height: 8),
-              _badge(
-                  'Dernière activité: ${summary['last_prediction_at'] ?? '-'}'),
+              _badge('Dernière activité: ${summary['last_prediction_at'] ?? '-'}'),
             ],
           ),
         ],
@@ -418,57 +619,24 @@ class _HomeScreenState extends State<HomeScreen> {
     Map<String, dynamic> metrics,
   ) {
     final cards = [
-      _kpiCard(
-        label: 'Prédictions',
-        value: '${summary['predictions_count'] ?? 0}',
-        delta: 'Total cumulé',
-        icon: Icons.insights_outlined,
-      ),
-      _kpiCard(
-        label: 'Taux de succès',
-        value: '${summary['success_rate'] ?? 0}%',
-        delta: 'Requêtes 2xx',
-        icon: Icons.verified_outlined,
-      ),
-      _kpiCard(
-        label: 'État modèle',
-        value: ml['model_ready'] == true ? 'Prêt' : 'Indisponible',
-        delta: 'Pipeline ML',
-        icon: Icons.model_training_outlined,
-      ),
-      _kpiCard(
-        label: 'Accuracy',
-        value: _shortMetric(metrics['accuracy']),
-        delta: 'Métrique globale',
-        icon: Icons.speed_outlined,
-      ),
+      _kpiCard(label: 'Prédictions', value: '${summary['predictions_count'] ?? 0}', delta: 'Total cumulé', icon: Icons.insights_outlined),
+      _kpiCard(label: 'Taux de succès', value: '${summary['success_rate'] ?? 0}%', delta: 'Requêtes 2xx', icon: Icons.verified_outlined),
+      _kpiCard(label: 'État modèle', value: ml['model_ready'] == true ? 'Prêt' : 'Indisponible', delta: 'Pipeline ML', icon: Icons.model_training_outlined),
+      _kpiCard(label: 'Accuracy', value: _shortMetric(metrics['accuracy']), delta: 'Métrique globale', icon: Icons.speed_outlined),
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final perRow = constraints.maxWidth > 1100
-            ? 4
-            : constraints.maxWidth > 720
-                ? 2
-                : 1;
-        final width = (constraints.maxWidth - (12 * (perRow - 1))) / perRow;
-
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children:
-              cards.map((card) => SizedBox(width: width, child: card)).toList(),
-        );
-      },
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      final perRow = constraints.maxWidth > 1100 ? 4 : constraints.maxWidth > 720 ? 2 : 1;
+      final width = (constraints.maxWidth - (12 * (perRow - 1))) / perRow;
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: cards.map((card) => SizedBox(width: width, child: card)).toList(),
+      );
+    });
   }
 
-  Widget _kpiCard({
-    required String label,
-    required String value,
-    required String delta,
-    required IconData icon,
-  }) {
+  Widget _kpiCard({required String label, required String value, required String delta, required IconData icon}) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -477,10 +645,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8EDFF),
-                borderRadius: BorderRadius.circular(10),
-              ),
+              decoration: BoxDecoration(color: const Color(0xFFE8EDFF), borderRadius: BorderRadius.circular(10)),
               child: Icon(icon, color: _deepBlue),
             ),
             const SizedBox(width: 12),
@@ -490,103 +655,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Text(label, style: const TextStyle(color: Color(0xFF475569))),
                   const SizedBox(height: 2),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  Text(
-                    delta,
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
-                      fontSize: 12,
-                    ),
-                  ),
+                  Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  Text(delta, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _predictionPanel() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Centre de prédiction',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Saisissez un bordereau puis lancez la classification.',
-              style: TextStyle(color: Color(0xFF64748B)),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _numericField(_poidsCtrl, 'Poids'),
-                _numericField(_volumeCtrl, 'Volume'),
-                _numericField(_conductiviteCtrl, 'Conductivité'),
-                _numericField(_opaciteCtrl, 'Opacité'),
-                _numericField(_rigiditeCtrl, 'Rigidité'),
-                _numericField(_prixCtrl, 'Prix revente'),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _textField(_sourceCtrl, 'Source'),
-            const SizedBox(height: 10),
-            _textField(_rapportCtrl, 'Rapport collecte', maxLines: 3),
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: _loading ? null : _submit,
-              icon: const Icon(Icons.play_arrow_outlined),
-              label:
-                  Text(_loading ? 'Classification...' : 'Lancer la prédiction'),
-            ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(_error!, style: const TextStyle(color: Colors.red)),
-              ),
-            if (_result != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8EDFF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Catégorie prédite: ${_result!.categorie}',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 4),
-                    Text('Texte nettoyé: ${_result!.texteClean}'),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Probabilités',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    ..._result!.probabilites.entries.map(
-                      (entry) => Text('• ${entry.key}: ${entry.value}'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -600,31 +673,13 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Supervision système',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
+            const Text('Supervision système', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            const Text(
-              'État API, disponibilité modèle et signaux de qualité.',
-              style: TextStyle(color: Color(0xFF64748B)),
-            ),
+            const Text('État API, disponibilité modèle et signaux.', style: TextStyle(color: Color(0xFF64748B))),
             const SizedBox(height: 14),
-            _statusRow(
-              title: 'API Backend',
-              value: _publicHealthStatus ?? 'chargement...',
-              ok: (_publicHealthStatus ?? '').toLowerCase() == 'ok',
-            ),
-            _statusRow(
-              title: 'Modèle ML',
-              value: ml['model_ready'] == true ? 'prêt' : 'indisponible',
-              ok: ml['model_ready'] == true,
-            ),
-            _statusRow(
-              title: 'Accuracy',
-              value: _shortMetric(metrics['accuracy']),
-              ok: true,
-            ),
+            _statusRow(title: 'API Backend', value: _publicHealthStatus ?? 'chargement...', ok: (_publicHealthStatus ?? '').toLowerCase() == 'ok'),
+            _statusRow(title: 'Modèle ML', value: ml['model_ready'] == true ? 'prêt' : 'indisponible', ok: ml['model_ready'] == true),
+            _statusRow(title: 'Accuracy', value: _shortMetric(metrics['accuracy']), ok: true),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -636,10 +691,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Métriques modèle',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
+                  const Text('Métriques modèle', style: TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
                   Text('Precision: ${_shortMetric(metrics['precision'])}'),
                   Text('Recall: ${_shortMetric(metrics['recall'])}'),
@@ -647,17 +699,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            if (_dashboardLoading) ...[
-              const SizedBox(height: 12),
-              const LinearProgressIndicator(),
-            ],
-            if (_dashboardError != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                _dashboardError!,
-                style: const TextStyle(color: Colors.red),
-              ),
-            ],
+            if (_dashboardLoading) ...[const SizedBox(height: 12), const LinearProgressIndicator()],
+            if (_dashboardError != null) ...[const SizedBox(height: 10), Text(_dashboardError!, style: const TextStyle(color: Colors.red))],
           ],
         ),
       ),
@@ -671,25 +714,17 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Flux des dernières prédictions',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
+            const Text('Flux des dernières prédictions', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            const Text(
-              'Timeline des opérations exécutées par la session courante.',
-              style: TextStyle(color: Color(0xFF64748B)),
-            ),
+            const Text('Timeline des opérations exécutées par la session.', style: TextStyle(color: Color(0xFF64748B))),
             const SizedBox(height: 12),
             if (recent.isEmpty)
               const Text('Aucune opération récente.')
             else
               ...recent.take(12).map((item) {
                 final map = item as Map<String, dynamic>;
-                final response =
-                    map['response_payload'] as Map<String, dynamic>?;
+                final response = map['response_payload'] as Map<String, dynamic>?;
                 final ok = (map['ml_status_code'] ?? 500) < 300;
-
                 return Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
@@ -705,47 +740,26 @@ class _HomeScreenState extends State<HomeScreen> {
                         height: 30,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: ok
-                              ? const Color(0xFFE8FAEE)
-                              : const Color(0xFFFFECEB),
+                          color: ok ? const Color(0xFFE8FAEE) : const Color(0xFFFFECEB),
                         ),
                         alignment: Alignment.center,
-                        child: Icon(
-                          ok ? Icons.check : Icons.error_outline,
-                          size: 16,
-                          color: ok
-                              ? const Color(0xFF166534)
-                              : const Color(0xFFB91C1C),
-                        ),
+                        child: Icon(ok ? Icons.check : Icons.error_outline, size: 16,
+                            color: ok ? const Color(0xFF166534) : const Color(0xFFB91C1C)),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Catégorie: ${response?['categorie'] ?? '-'}',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Date: ${map['created_at'] ?? '-'}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF64748B),
-                              ),
-                            ),
+                            Text('Catégorie: ${response?['categorie'] ?? '-'}',
+                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                            Text('Date: ${map['created_at'] ?? '-'}',
+                                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
                           ],
                         ),
                       ),
-                      Text(
-                        'HTTP ${map['ml_status_code'] ?? '-'}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF334155),
-                        ),
-                      ),
+                      Text('HTTP ${map['ml_status_code'] ?? '-'}',
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155))),
                     ],
                   ),
                 );
@@ -756,27 +770,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _statusRow({
-    required String title,
-    required String value,
-    required bool ok,
-  }) {
+  Widget _statusRow({required String title, required String value, required bool ok}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Icon(
-            ok ? Icons.check_circle : Icons.cancel_outlined,
-            color: ok ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
-            size: 18,
-          ),
+          Icon(ok ? Icons.check_circle : Icons.cancel_outlined,
+              color: ok ? const Color(0xFF16A34A) : const Color(0xFFDC2626), size: 18),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
+          Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))),
           Text(value),
         ],
       ),
@@ -786,17 +788,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _badge(String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: const Color(0x33214BFF),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), color: const Color(0x33214BFF)),
+      child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
     );
   }
 
@@ -804,37 +797,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final text = (value ?? '-').toString();
     if (text.length <= 7) return text;
     return text.substring(0, 7);
-  }
-
-  Widget _numericField(TextEditingController controller, String label) {
-    return SizedBox(
-      width: 190,
-      child: _textField(controller, label, keyboardType: TextInputType.number),
-    );
-  }
-
-  Widget _textField(
-    TextEditingController controller,
-    String label, {
-    int maxLines = 1,
-    TextInputType? keyboardType,
-  }) {
-    return TextFormField(
-      controller: controller,
-      maxLines: maxLines,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(labelText: label),
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Champ requis';
-        }
-        if (keyboardType == TextInputType.number &&
-            double.tryParse(value) == null) {
-          return 'Nombre invalide';
-        }
-        return null;
-      },
-    );
   }
 }
 
@@ -853,30 +815,12 @@ class _DashboardBackground extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          Positioned(
-            top: -120,
-            right: -80,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0x14214BFF),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -130,
-            left: -70,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0x12000091),
-              ),
-            ),
-          ),
+          Positioned(top: -120, right: -80,
+              child: Container(width: 320, height: 320,
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x14214BFF)))),
+          Positioned(bottom: -130, left: -70,
+              child: Container(width: 300, height: 300,
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x12000091)))),
         ],
       ),
     );
@@ -885,7 +829,6 @@ class _DashboardBackground extends StatelessWidget {
 
 class _NavItem extends StatelessWidget {
   const _NavItem({required this.icon, required this.label});
-
   final IconData icon;
   final String label;
 
@@ -894,21 +837,12 @@ class _NavItem extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        color: const Color(0xFFF8FAFF),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: const Color(0xFFF8FAFF)),
       child: Row(
         children: [
           Icon(icon, size: 18, color: const Color(0xFF334155)),
           const SizedBox(width: 10),
-          Text(
-            label,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF334155),
-            ),
-          ),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF334155))),
         ],
       ),
     );
