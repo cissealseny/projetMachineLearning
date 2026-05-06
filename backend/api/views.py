@@ -74,42 +74,12 @@ class PublicTunisiaDashboardView(APIView):
 
         if not points:
             points = [
-                {
-                    "site": "Tunis Centre",
-                    "governorate": "Tunis",
-                    "lat": 36.8065,
-                    "lng": 10.1815,
-                },
-                {
-                    "site": "Lac 1",
-                    "governorate": "Tunis",
-                    "lat": 36.8453,
-                    "lng": 10.2729,
-                },
-                {
-                    "site": "Sfax Ville",
-                    "governorate": "Sfax",
-                    "lat": 34.7406,
-                    "lng": 10.7603,
-                },
-                {
-                    "site": "Sousse Medina",
-                    "governorate": "Sousse",
-                    "lat": 35.8256,
-                    "lng": 10.6084,
-                },
-                {
-                    "site": "Bizerte Port",
-                    "governorate": "Bizerte",
-                    "lat": 37.2746,
-                    "lng": 9.8739,
-                },
-                {
-                    "site": "Gabes Nord",
-                    "governorate": "Gabes",
-                    "lat": 33.8815,
-                    "lng": 10.0982,
-                },
+                {"site": "Tunis Centre", "governorate": "Tunis", "lat": 36.8065, "lng": 10.1815},
+                {"site": "Lac 1", "governorate": "Tunis", "lat": 36.8453, "lng": 10.2729},
+                {"site": "Sfax Ville", "governorate": "Sfax", "lat": 34.7406, "lng": 10.7603},
+                {"site": "Sousse Medina", "governorate": "Sousse", "lat": 35.8256, "lng": 10.6084},
+                {"site": "Bizerte Port", "governorate": "Bizerte", "lat": 37.2746, "lng": 9.8739},
+                {"site": "Gabes Nord", "governorate": "Gabes", "lat": 33.8815, "lng": 10.0982},
             ]
 
         if not governorates:
@@ -153,6 +123,63 @@ class PredictView(APIView):
             )
 
             return Response(response_payload, status=ml_resp.status_code)
+        except RequestException as exc:
+            return Response(
+                {"detail": f"ML API unreachable: {exc}"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+
+# ─── Vue NLP : classification par texte libre uniquement ─────────────────────
+class PredictNlpView(APIView):
+    """
+    POST /api/predict/nlp/
+    Body: { "rapport_collecte": "Ferraille et câbles électriques..." }
+
+    Transmet au FastAPI ML l'endpoint /predict/nlp en injectant
+    les médianes globales pour les features numériques.
+    Le modèle ne se base donc que sur le texte pour prédire.
+    """
+
+    def post(self, request):
+        rapport = (request.data.get("rapport_collecte") or "").strip()
+        if not rapport:
+            return Response(
+                {"detail": "Le champ 'rapport_collecte' est requis et ne peut pas être vide."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Payload envoyé au FastAPI — médianes injectées côté Django
+        # pour neutraliser les features numériques
+        ml_payload = {
+            "Poids": 25.0,
+            "Volume": 50.0,
+            "Conductivite": 3.5,
+            "Opacite": 0.7,
+            "Rigidite": 4.2,
+            "Prix_Revente": 12.0,
+            "Source": "NLP_only",
+            "Rapport_Collecte": rapport,
+        }
+
+        try:
+            ml_resp = requests.post(
+                f"{ML_API_BASE_URL}/predict/nlp",
+                json=ml_payload,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+            response_payload = ml_resp.json()
+
+            # Log de la prédiction NLP
+            PredictionLog.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                request_payload={"rapport_collecte": rapport, "mode": "nlp_only"},
+                response_payload=response_payload,
+                ml_status_code=ml_resp.status_code,
+            )
+
+            return Response(response_payload, status=ml_resp.status_code)
+
         except RequestException as exc:
             return Response(
                 {"detail": f"ML API unreachable: {exc}"},

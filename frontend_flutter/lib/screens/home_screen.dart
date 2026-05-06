@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 
 import '../models/predict_models.dart';
 import '../services/api_service.dart';
+import 'nlp_screen.dart';
+
+// ─── Onglets disponibles dans le dashboard ───────────────────────────────────
+enum _HomeTab { prediction, nlp, history, health }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -24,6 +28,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final _formKey = GlobalKey<FormState>();
   late final ApiService _api;
+
+  // Onglet actif
+  _HomeTab _activeTab = _HomeTab.prediction;
 
   // Sliders values
   double _poids = 25;
@@ -231,14 +238,33 @@ class _HomeScreenState extends State<HomeScreen> {
               child: isDesktop
                   ? Row(children: [
                       _sideRail(),
-                      Expanded(child: _mainContent(summary, ml, metrics, recent)),
+                      Expanded(child: _activeContent(summary, ml, metrics, recent)),
                     ])
-                  : _mainContent(summary, ml, metrics, recent),
+                  : _activeContent(summary, ml, metrics, recent),
             ),
           ),
         ],
       ),
     );
+  }
+
+  // ─── Sélection du contenu selon l'onglet actif ────────────────────────────
+  Widget _activeContent(
+    Map<String, dynamic> summary,
+    Map<String, dynamic> ml,
+    Map<String, dynamic> metrics,
+    List<dynamic> recent,
+  ) {
+    switch (_activeTab) {
+      case _HomeTab.prediction:
+        return _mainContent(summary, ml, metrics, recent);
+      case _HomeTab.nlp:
+        return NlpScreen(api: _api);
+      case _HomeTab.history:
+        return _historyFullPage(recent);
+      case _HomeTab.health:
+        return _healthFullPage(ml, metrics);
+    }
   }
 
   Widget _mainContent(
@@ -288,6 +314,73 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ─── Page Historique complète ─────────────────────────────────────────────
+  Widget _historyFullPage(List<dynamic> recent) {
+    return SingleChildScrollView(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _sectionHeader('Historique des prédictions', Icons.history_outlined),
+                const SizedBox(height: 14),
+                _historyPanel(recent),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Page Santé ML complète ───────────────────────────────────────────────
+  Widget _healthFullPage(Map<String, dynamic> ml, Map<String, dynamic> metrics) {
+    return SingleChildScrollView(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _sectionHeader('Santé du modèle ML', Icons.memory_outlined),
+                const SizedBox(height: 14),
+                _systemPanel(ml, metrics),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionHeader(String title, IconData icon) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF001A6E), Color(0xFF0A2EA6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white, size: 28),
+          const SizedBox(width: 12),
+          Text(title,
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+
   Widget _predictionPanel() {
     Color categoryColor = const Color(0xFF000091);
     if (_result != null) {
@@ -323,7 +416,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Résultat temps réel
             if (_loading)
               const Center(child: CircularProgressIndicator())
             else if (_result != null) ...[
@@ -388,7 +480,6 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 16),
             ],
 
-            // Sliders avec saisie manuelle
             _sliderField('Poids (kg)', _poids, 0, 200, _poidsTextCtrl,
                 (v) => _onSliderChanged(v, (x) => _poids = x, _poidsTextCtrl),
                 (v) => _onTextChanged(v, 0, 200, (x) => _poids = x)),
@@ -498,6 +589,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ─── Sidebar avec les 4 onglets ───────────────────────────────────────────
   Widget _sideRail() {
     return Container(
       width: 240,
@@ -508,6 +600,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Logo
               Row(
                 children: [
                   Container(
@@ -529,10 +622,40 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 18),
-              const _NavItem(icon: Icons.dashboard_outlined, label: 'Vue générale'),
-              const _NavItem(icon: Icons.tune_outlined, label: 'Prédiction'),
-              const _NavItem(icon: Icons.history_outlined, label: 'Historique'),
-              const _NavItem(icon: Icons.memory_outlined, label: 'Santé ML'),
+
+              // Nav items
+              _NavItem(
+                icon: Icons.dashboard_outlined,
+                label: 'Vue générale',
+                active: _activeTab == _HomeTab.prediction,
+                onTap: () => setState(() => _activeTab = _HomeTab.prediction),
+              ),
+              _NavItem(
+                icon: Icons.tune_outlined,
+                label: 'Prédiction',
+                active: _activeTab == _HomeTab.prediction,
+                onTap: () => setState(() => _activeTab = _HomeTab.prediction),
+              ),
+              _NavItem(
+                icon: Icons.psychology_outlined,
+                label: 'Assistant NLP',
+                active: _activeTab == _HomeTab.nlp,
+                onTap: () => setState(() => _activeTab = _HomeTab.nlp),
+                highlight: true,
+              ),
+              _NavItem(
+                icon: Icons.history_outlined,
+                label: 'Historique',
+                active: _activeTab == _HomeTab.history,
+                onTap: () => setState(() => _activeTab = _HomeTab.history),
+              ),
+              _NavItem(
+                icon: Icons.memory_outlined,
+                label: 'Santé ML',
+                active: _activeTab == _HomeTab.health,
+                onTap: () => setState(() => _activeTab = _HomeTab.health),
+              ),
+
               const Spacer(),
               Container(
                 padding: const EdgeInsets.all(10),
@@ -800,6 +923,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+// ─── Background ──────────────────────────────────────────────────────────────
 class _DashboardBackground extends StatelessWidget {
   const _DashboardBackground();
 
@@ -827,23 +951,86 @@ class _DashboardBackground extends StatelessWidget {
   }
 }
 
+// ─── Nav Item (avec état actif + highlight NLP) ───────────────────────────────
 class _NavItem extends StatelessWidget {
-  const _NavItem({required this.icon, required this.label});
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+    this.highlight = false,
+  });
+
   final IconData icon;
   final String label;
+  final VoidCallback onTap;
+  final bool active;
+  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: const Color(0xFFF8FAFF)),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: const Color(0xFF334155)),
-          const SizedBox(width: 10),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF334155))),
-        ],
+    const primaryBlue = Color(0xFF000091);
+    const deepBlue = Color(0xFF001A6E);
+
+    final bgColor = active
+        ? const Color(0xFFE8EDFF)
+        : highlight
+            ? const Color(0xFFF0FFF4)
+            : const Color(0xFFF8FAFF);
+
+    final iconColor = active
+        ? primaryBlue
+        : highlight
+            ? const Color(0xFF16A34A)
+            : const Color(0xFF334155);
+
+    final textColor = active
+        ? deepBlue
+        : highlight
+            ? const Color(0xFF166534)
+            : const Color(0xFF334155);
+
+    final borderColor = active
+        ? primaryBlue.withOpacity(0.3)
+        : highlight
+            ? const Color(0xFFBBF7D0)
+            : Colors.transparent;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: bgColor,
+          border: Border.all(color: borderColor, width: 1),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: iconColor),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                      color: textColor)),
+            ),
+            if (highlight && !active)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16A34A).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text('NLP',
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF166534))),
+              ),
+          ],
+        ),
       ),
     );
   }

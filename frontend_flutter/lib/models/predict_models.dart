@@ -52,3 +52,30 @@ class PredictResponse {
     );
   }
 }
+
+/// Réponse spécifique à l'endpoint /predict/nlp
+class NlpResponse {
+  NlpResponse({
+    required this.categorie,
+    required this.probabilites,
+    required this.texteClean,
+    required this.tokensCount,
+    required this.note,
+  });
+
+  final String categorie;
+  final Map<String, dynamic> probabilites;
+  final String texteClean;
+  final int tokensCount;
+  final String note;
+
+  factory NlpResponse.fromJson(Map<String, dynamic> json) {
+    return NlpResponse(
+      categorie: (json['categorie'] ?? '').toString(),
+      probabilites: (json['probabilites'] as Map<String, dynamic>? ?? {}),
+      texteClean: (json['texte_clean'] ?? '').toString(),
+      tokensCount: (json['tokens_count'] as num?)?.toInt() ?? 0,
+      note: (json['note'] ?? '').toString(),
+    );
+  }
+}

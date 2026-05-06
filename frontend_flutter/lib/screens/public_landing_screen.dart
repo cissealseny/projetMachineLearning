@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../services/api_service.dart';
 
@@ -28,6 +30,8 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
   String? _error;
   String? _publicDataError;
   _PublicLang _lang = _PublicLang.fr;
+  _CollectionPoint? _selectedPoint;
+  final MapController _mapController = MapController();
 
   List<_CollectionPoint> _points = const [
     _CollectionPoint('Tunis Centre', 'Tunis', 36.8065, 10.1815),
@@ -35,16 +39,16 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
     _CollectionPoint('Sfax Ville', 'Sfax', 34.7406, 10.7603),
     _CollectionPoint('Sousse Medina', 'Sousse', 35.8256, 10.6084),
     _CollectionPoint('Bizerte Port', 'Bizerte', 37.2746, 9.8739),
+    _CollectionPoint('Nabeul Centre', 'Nabeul', 36.4513, 10.7350),
     _CollectionPoint('Gabes Nord', 'Gabes', 33.8815, 10.0982),
   ];
 
   List<_GovData> _governorates = const [
-    _GovData('Tunis', 1280, 74),
-    _GovData('Sfax', 1090, 69),
-    _GovData('Sousse', 980, 66),
-    _GovData('Nabeul', 860, 63),
-    _GovData('Bizerte', 720, 58),
-    _GovData('Gabes', 640, 55),
+    _GovData('Tunis', 190439, 95),
+    _GovData('Sousse', 174874, 95),
+    _GovData('Nabeul', 172953, 95),
+    _GovData('Sfax', 168836, 95),
+    _GovData('Bizerte', 40006, 95),
   ];
 
   @override
@@ -58,9 +62,7 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
       _loading = true;
       _error = null;
     });
-
     final error = await widget.onQuickAccess();
-
     if (!mounted) return;
     setState(() {
       _loading = false;
@@ -106,24 +108,21 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
 
       if (!mounted) return;
       setState(() {
-        if (points.isNotEmpty) {
-          _points = points;
-        }
-        if (gov.isNotEmpty) {
-          _governorates = gov;
-        }
+        if (points.isNotEmpty) _points = points;
+        if (gov.isNotEmpty) _governorates = gov;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _publicDataError = e.toString();
-      });
+      setState(() => _publicDataError = e.toString());
     } finally {
       if (!mounted) return;
-      setState(() {
-        _publicDataLoading = false;
-      });
+      setState(() => _publicDataLoading = false);
     }
+  }
+
+  void _focusOnPoint(_CollectionPoint point) {
+    setState(() => _selectedPoint = point);
+    _mapController.move(LatLng(point.lat, point.lng), 12.0);
   }
 
   String _t(String fr, String ar) => _lang == _PublicLang.fr ? fr : ar;
@@ -171,10 +170,7 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
                             children: [
                               Expanded(flex: 5, child: _collectionMapPanel()),
                               const SizedBox(width: 12),
-                              Expanded(
-                                flex: 4,
-                                child: _governorateDashboardPanel(),
-                              ),
+                              Expanded(flex: 4, child: _governorateDashboardPanel()),
                             ],
                           )
                         else ...[
@@ -209,10 +205,7 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
           alignment: Alignment.center,
           child: const Text(
             'TN',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
           ),
         ),
         const SizedBox(width: 12),
@@ -230,10 +223,8 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                _t(
-                  'EcoSmart · Plateforme déchets intelligente',
-                  'EcoSmart · منصة ذكية لإدارة النفايات',
-                ),
+                _t('EcoSmart · Plateforme déchets intelligente',
+                    'EcoSmart · منصة ذكية لإدارة النفايات'),
                 style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
               ),
             ],
@@ -294,11 +285,7 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
           end: Alignment.bottomRight,
         ),
         boxShadow: const [
-          BoxShadow(
-            color: Color(0x3A001A6E),
-            blurRadius: 24,
-            offset: Offset(0, 10),
-          ),
+          BoxShadow(color: Color(0x3A001A6E), blurRadius: 24, offset: Offset(0, 10)),
         ],
       ),
       padding: const EdgeInsets.all(28),
@@ -315,10 +302,8 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
           ),
           const SizedBox(height: 14),
           Text(
-            _t(
-              'Traçabilité moderne pour une filière déchets performante',
-              'تتبع حديث لسلسلة نفايات أكثر كفاءة',
-            ),
+            _t('Traçabilité moderne pour une filière déchets performante',
+                'تتبع حديث لسلسلة نفايات أكثر كفاءة'),
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
@@ -332,11 +317,7 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
               'Page publique: découvrez les objectifs du projet, ses indicateurs clés et la démarche MLOps. Les opérations métiers restent accessibles uniquement après connexion.',
               'صفحة عامة: اكتشف أهداف المشروع ومؤشراته الرئيسية ونهج MLOps. الوظائف التشغيلية متاحة فقط بعد تسجيل الدخول.',
             ),
-            style: const TextStyle(
-              color: Color(0xFFDDE6FF),
-              fontSize: 15,
-              height: 1.45,
-            ),
+            style: const TextStyle(color: Color(0xFFDDE6FF), fontSize: 15, height: 1.45),
           ),
           const SizedBox(height: 18),
           _InfoLine(
@@ -345,17 +326,13 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
           ),
           _InfoLine(
             icon: Icons.lock_outline,
-            text: _t(
-              'Fonctions sensibles réservées aux sessions actives',
-              'الوظائف الحساسة مخصصة للجلسات النشطة',
-            ),
+            text: _t('Fonctions sensibles réservées aux sessions actives',
+                'الوظائف الحساسة مخصصة للجلسات النشطة'),
           ),
           _InfoLine(
             icon: Icons.auto_graph_outlined,
-            text: _t(
-              'Pipeline IA et suivi de performance',
-              'مسار ذكاء اصطناعي ومتابعة الأداء',
-            ),
+            text: _t('Pipeline IA et suivi de performance',
+                'مسار ذكاء اصطناعي ومتابعة الأداء'),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -474,6 +451,9 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────
+  //  CARTE OPENSTREETMAP AVEC FLUTTER_MAP
+  // ─────────────────────────────────────────────────────────────
   Widget _collectionMapPanel() {
     return Card(
       child: Padding(
@@ -508,6 +488,16 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
                   icon: const Icon(Icons.refresh, size: 18),
                   label: Text(_t('Actualiser', 'تحديث')),
                 ),
+                const Spacer(),
+                // Bouton reset zoom
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() => _selectedPoint = null);
+                    _mapController.move(const LatLng(33.8869, 9.5375), 6.0);
+                  },
+                  icon: const Icon(Icons.zoom_out_map, size: 18),
+                  label: Text(_t('Vue globale', 'عرض شامل')),
+                ),
               ],
             ),
             if (_publicDataError != null)
@@ -519,59 +509,189 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
                 ),
               ),
             const SizedBox(height: 12),
-            Container(
-              height: 250,
-              decoration: BoxDecoration(
+
+            // ── VRAIE CARTE OPENSTREETMAP ──
+            SizedBox(
+              height: 350,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFEFF4FF), Color(0xFFDDE8FF)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: const MapOptions(
+                    initialCenter: LatLng(33.8869, 9.5375), // centre Tunisie
+                    initialZoom: 6.0,
+                    minZoom: 5.0,
+                    maxZoom: 16.0,
+                  ),
+                  children: [
+                    // Tuile OpenStreetMap (gratuite)
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.ecosmart.app',
+                    ),
+                    // Marqueurs
+                    MarkerLayer(
+                      markers: _points.map((point) {
+                        final isSelected = _selectedPoint?.site == point.site;
+                        return Marker(
+                          point: LatLng(point.lat, point.lng),
+                          width: 160,
+                          height: 70,
+                          child: GestureDetector(
+                            onTap: () => _focusOnPoint(point),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? const Color(0xFFE63946)
+                                        : const Color(0xFF001A6E),
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: isSelected
+                                            ? const Color(0x88E63946)
+                                            : const Color(0x55001A6E),
+                                        blurRadius: isSelected ? 12 : 6,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    point.site,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.location_pin,
+                                  color: isSelected
+                                      ? const Color(0xFFE63946)
+                                      : const Color(0xFF001A6E),
+                                  size: isSelected ? 34 : 28,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ),
               ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Opacity(
-                      opacity: 0.15,
-                      child: Icon(
-                        Icons.map,
-                        size: 160,
-                        color: const Color(0xFF001A6E).withValues(alpha: 0.4),
+            ),
+
+            // Info popup sous la carte si point sélectionné
+            if (_selectedPoint != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF4FF),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFB8C8F8)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_on, color: Color(0xFF001A6E)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedPoint!.site,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF001A6E),
+                            ),
+                          ),
+                          Text(
+                            '${_t("Gouvernorat", "الولاية")}: ${_selectedPoint!.governorate}  •  ${_selectedPoint!.lat.toStringAsFixed(4)}, ${_selectedPoint!.lng.toStringAsFixed(4)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  ..._mapMarkers(),
-                ],
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => setState(() => _selectedPoint = null),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
+
             const SizedBox(height: 12),
+
+            // ── BOUTONS CLIQUABLES ──
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _points
-                  .map(
-                    (p) => Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 7,
+              children: _points.map((p) {
+                final isSelected = _selectedPoint?.site == p.site;
+                return GestureDetector(
+                  onTap: () => _focusOnPoint(p),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF001A6E)
+                          : const Color(0xFFF8FAFF),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF001A6E)
+                            : const Color(0xFFDCE2F6),
+                        width: isSelected ? 2 : 1,
                       ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFF),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: const Color(0xFFDCE2F6)),
-                      ),
-                      child: Text(
-                        '${p.site} · ${p.governorate}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF334155),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      boxShadow: isSelected
+                          ? const [
+                              BoxShadow(
+                                color: Color(0x33001A6E),
+                                blurRadius: 8,
+                              )
+                            ]
+                          : null,
                     ),
-                  )
-                  .toList(),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.location_on,
+                          size: 14,
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFF001A6E),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${p.site} · ${p.governorate}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF334155),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
           ],
         ),
@@ -579,46 +699,10 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
     );
   }
 
-  List<Widget> _mapMarkers() {
-    final lats = _points.map((e) => e.lat).toList();
-    final lngs = _points.map((e) => e.lng).toList();
-    final minLat = lats.reduce((a, b) => a < b ? a : b);
-    final maxLat = lats.reduce((a, b) => a > b ? a : b);
-    final minLng = lngs.reduce((a, b) => a < b ? a : b);
-    final maxLng = lngs.reduce((a, b) => a > b ? a : b);
-
-    return _points.map((point) {
-      final x = ((point.lng - minLng) / (maxLng - minLng + 0.0001)) * 84 + 8;
-      final y = ((maxLat - point.lat) / (maxLat - minLat + 0.0001)) * 74 + 12;
-
-      return Positioned(
-        left: x,
-        top: y,
-        child: Tooltip(
-          message: '${point.site} (${point.governorate})',
-          child: Container(
-            width: 16,
-            height: 16,
-            decoration: BoxDecoration(
-              color: const Color(0xFF001A6E),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Colors.white, width: 2),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x55001A6E),
-                  blurRadius: 6,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }).toList();
-  }
-
   Widget _governorateDashboardPanel() {
-    final maxVolume =
-        _governorates.map((e) => e.monthlyTons).reduce((a, b) => a > b ? a : b);
+    final maxVolume = _governorates
+        .map((e) => e.monthlyTons)
+        .reduce((a, b) => a > b ? a : b);
 
     return Card(
       child: Padding(
@@ -688,9 +772,12 @@ class _PublicLandingScreenState extends State<PublicLandingScreen> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  MODÈLES
+// ─────────────────────────────────────────────────────────────
+
 class _CollectionPoint {
   const _CollectionPoint(this.site, this.governorate, this.lat, this.lng);
-
   final String site;
   final String governorate;
   final double lat;
@@ -699,11 +786,14 @@ class _CollectionPoint {
 
 class _GovData {
   const _GovData(this.name, this.monthlyTons, this.recoveryRate);
-
   final String name;
   final int monthlyTons;
   final int recoveryRate;
 }
+
+// ─────────────────────────────────────────────────────────────
+//  WIDGETS RÉUTILISABLES
+// ─────────────────────────────────────────────────────────────
 
 class _LandingBackground extends StatelessWidget {
   const _LandingBackground();
@@ -752,7 +842,6 @@ class _LandingBackground extends StatelessWidget {
 
 class _HeroChip extends StatelessWidget {
   const _HeroChip({required this.label});
-
   final String label;
 
   @override
@@ -778,7 +867,6 @@ class _HeroChip extends StatelessWidget {
 
 class _InfoLine extends StatelessWidget {
   const _InfoLine({required this.icon, required this.text});
-
   final IconData icon;
   final String text;
 
@@ -791,10 +879,8 @@ class _InfoLine extends StatelessWidget {
           Icon(icon, color: const Color(0xFFDDE6FF), size: 18),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(color: Color(0xFFDDE6FF)),
-            ),
+            child: Text(text,
+                style: const TextStyle(color: Color(0xFFDDE6FF))),
           ),
         ],
       ),
@@ -808,7 +894,6 @@ class _InfoCard extends StatelessWidget {
     required this.body,
     required this.icon,
   });
-
   final String title;
   final String body;
   final IconData icon;
@@ -831,15 +916,13 @@ class _InfoCard extends StatelessWidget {
               child: Icon(icon, color: const Color(0xFF001A6E)),
             ),
             const SizedBox(height: 12),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-            ),
+            Text(title,
+                style: const TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            Text(
-              body,
-              style: const TextStyle(color: Color(0xFF475569), height: 1.45),
-            ),
+            Text(body,
+                style: const TextStyle(
+                    color: Color(0xFF475569), height: 1.45)),
           ],
         ),
       ),

@@ -7,7 +7,7 @@ import '../models/predict_models.dart';
 class ApiService {
   ApiService({http.Client? client, String? baseUrl})
       : _client = client ?? http.Client(),
-        _baseUrl = baseUrl ?? 'http://127.0.0.1:8001/api';
+        _baseUrl = baseUrl ?? 'http://127.0.0.1:9000/api';
 
   final http.Client _client;
   final String _baseUrl;
@@ -118,6 +118,7 @@ class ApiService {
     throw Exception('Health check failed: ${response.statusCode}');
   }
 
+  // ─── Prédiction numérique + texte ────────────────────────────────────────
   Future<PredictResponse> predict(PredictRequest request) async {
     final uri = Uri.parse('$_baseUrl/predict/');
     final response = await _client.post(
@@ -136,6 +137,26 @@ class ApiService {
     );
   }
 
+  // ─── Prédiction NLP uniquement (texte libre) ──────────────────────────────
+  Future<NlpResponse> predictNlp(String text) async {
+    final uri = Uri.parse('$_baseUrl/predict/nlp/');
+    final response = await _client.post(
+      uri,
+      headers: _authHeaders(),
+      body: jsonEncode({'rapport_collecte': text}),
+    );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return NlpResponse.fromJson(json);
+    }
+
+    throw Exception(
+      'NLP prediction failed: ${response.statusCode} ${response.body}',
+    );
+  }
+
+  // ─── Dashboard authentifié ────────────────────────────────────────────────
   Future<Map<String, dynamic>> dashboard() async {
     final uri = Uri.parse('$_baseUrl/dashboard/');
     final response = await _client.get(uri, headers: _authHeaders());
@@ -147,6 +168,7 @@ class ApiService {
     );
   }
 
+  // ─── Historique des prédictions ───────────────────────────────────────────
   Future<List<dynamic>> predictionHistory() async {
     final uri = Uri.parse('$_baseUrl/predictions/history/');
     final response = await _client.get(uri, headers: _authHeaders());
@@ -158,6 +180,7 @@ class ApiService {
     );
   }
 
+  // ─── Dashboard public Tunisie ─────────────────────────────────────────────
   Future<Map<String, dynamic>> publicTunisiaDashboard() async {
     final uri = Uri.parse('$_baseUrl/public/tunisia-dashboard/');
     final response = await _client.get(uri);
