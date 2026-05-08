@@ -50,7 +50,7 @@ jobs:
         run: python -c "import nltk; nltk.download('stopwords')"
 
       - name: Entraîner le modèle (nécessaire pour les tests modèle + API)
-        run: python scripts/train.py --data dataset_ProjetML_2026.csv
+        run: python scripts/train.py --data notebooks/dataset_ProjetML_2026.csv
 
       - name: Lancer les tests avec coverage
         run: |
@@ -81,7 +81,7 @@ jobs:
         run: |
           pip install -r requirements.txt
           python -c "import nltk; nltk.download('stopwords')"
-          python scripts/train.py --data dataset_ProjetML_2026.csv
+          python scripts/train.py --data notebooks/dataset_ProjetML_2026.csv
 
       - name: Build de l'image Docker
         run: docker build -t ecosmart-classifier:${{ github.sha }} .

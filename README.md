@@ -9,7 +9,7 @@ Classifie des déchets en catégories et estime leur valeur de revente, à parti
 pip install -r requirements.txt
 
 # 2. Entraîner le modèle
-python scripts/train.py --data dataset_ProjetML_2026.csv
+python scripts/train.py --data notebooks/dataset_ProjetML_2026.csv
 
 # 3. Lancer l'API
 uvicorn app.main:app --reload
@@ -36,6 +36,18 @@ docker-compose up --build
 
 ```bash
 pytest tests/ --cov=app --cov=scripts --cov-report=term-missing -v
+```
+
+---
+
+## Pipeline DVC
+
+```bash
+# Initialiser DVC (une seule fois)
+dvc init
+
+# Rejouer le pipeline
+dvc repro
 ```
 
 ---

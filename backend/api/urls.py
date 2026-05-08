@@ -12,6 +12,7 @@ from .views import (
     PredictNlpView,
     PredictView,
     RegisterView,
+    RetrainView,
 )
 
 urlpatterns = [
@@ -34,4 +35,7 @@ urlpatterns = [
     # Dashboard & historique
     path("predictions/history/", PredictionHistoryView.as_view(), name="prediction-history"),
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
+
+    # ML Ops
+    path("ml/retrain/", RetrainView.as_view(), name="ml-retrain"),
 ]

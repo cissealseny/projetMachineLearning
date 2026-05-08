@@ -1,0 +1,16 @@
+stages:
+  train:
+    cmd: python scripts/train.py --data notebooks/dataset_ProjetML_2026.csv
+    deps:
+      - scripts/train.py
+      - notebooks/dataset_ProjetML_2026.csv
+    outs:
+      - models/pipeline.joblib
+
+  train_nlp:
+    cmd: python scripts/train_nlp.py --data notebooks/dataset_ProjetML_2026.csv
+    deps:
+      - scripts/train_nlp.py
+      - notebooks/dataset_ProjetML_2026.csv
+    outs:
+      - models/pipeline_nlp.joblib

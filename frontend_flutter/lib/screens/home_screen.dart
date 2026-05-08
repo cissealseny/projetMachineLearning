@@ -56,10 +56,12 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = false;
   bool _dashboardLoading = false;
   bool _authenticated = false;
+  bool _retrainLoading = false;
 
   String? _error;
   String? _dashboardError;
   String? _publicHealthStatus;
+  String? _retrainStatus;
 
   Map<String, dynamic>? _dashboard;
   PredictResponse? _result;
@@ -74,9 +76,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _poidsTextCtrl = TextEditingController(text: _poids.toStringAsFixed(1));
     _volumeTextCtrl = TextEditingController(text: _volume.toStringAsFixed(1));
-    _conductiviteTextCtrl = TextEditingController(text: _conductivite.toStringAsFixed(1));
+    _conductiviteTextCtrl =
+        TextEditingController(text: _conductivite.toStringAsFixed(1));
     _opaciteTextCtrl = TextEditingController(text: _opacite.toStringAsFixed(1));
-    _rigiditeTextCtrl = TextEditingController(text: _rigidite.toStringAsFixed(1));
+    _rigiditeTextCtrl =
+        TextEditingController(text: _rigidite.toStringAsFixed(1));
     _prixTextCtrl = TextEditingController(text: _prix.toStringAsFixed(1));
 
     _loadPublicHealth();
@@ -100,14 +104,16 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _onSliderChanged(double value, Function(double) setter, TextEditingController ctrl) {
+  void _onSliderChanged(
+      double value, Function(double) setter, TextEditingController ctrl) {
     setState(() => setter(value));
     ctrl.text = value.toStringAsFixed(1);
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 600), _submitAuto);
   }
 
-  void _onTextChanged(String text, double min, double max, Function(double) setter) {
+  void _onTextChanged(
+      String text, double min, double max, Function(double) setter) {
     final parsed = double.tryParse(text);
     if (parsed != null && parsed >= min && parsed <= max) {
       setState(() => setter(parsed));
@@ -175,6 +181,27 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _retrainModels() async {
+    if (!_authenticated) return;
+    setState(() {
+      _retrainLoading = true;
+      _retrainStatus = null;
+    });
+    try {
+      final result = await _api.retrainModels();
+      if (!mounted) return;
+      setState(() {
+        _retrainStatus = (result['detail'] ?? 'Retrain started.').toString();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _retrainStatus = e.toString());
+    } finally {
+      if (!mounted) return;
+      setState(() => _retrainLoading = false);
+    }
+  }
+
   void _logout() {
     _api.logout();
     widget.onLogout?.call();
@@ -207,7 +234,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Espace sécurisé',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+                        style: TextStyle(
+                            fontSize: 24, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     const Text(
                       'Ce dashboard nécessite une session active.',
@@ -238,7 +266,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: isDesktop
                   ? Row(children: [
                       _sideRail(),
-                      Expanded(child: _activeContent(summary, ml, metrics, recent)),
+                      Expanded(
+                          child: _activeContent(summary, ml, metrics, recent)),
                     ])
                   : _activeContent(summary, ml, metrics, recent),
             ),
@@ -325,7 +354,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _sectionHeader('Historique des prédictions', Icons.history_outlined),
+                _sectionHeader(
+                    'Historique des prédictions', Icons.history_outlined),
                 const SizedBox(height: 14),
                 _historyPanel(recent),
               ],
@@ -337,7 +367,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ─── Page Santé ML complète ───────────────────────────────────────────────
-  Widget _healthFullPage(Map<String, dynamic> ml, Map<String, dynamic> metrics) {
+  Widget _healthFullPage(
+      Map<String, dynamic> ml, Map<String, dynamic> metrics) {
     return SingleChildScrollView(
       child: Center(
         child: ConstrainedBox(
@@ -375,7 +406,9 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 12),
           Text(title,
               style: const TextStyle(
-                  color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800)),
         ],
       ),
     );
@@ -415,7 +448,6 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(color: Color(0xFF64748B)),
             ),
             const SizedBox(height: 16),
-
             if (_loading)
               const Center(child: CircularProgressIndicator())
             else if (_result != null) ...[
@@ -431,10 +463,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.category_outlined, color: categoryColor, size: 20),
+                        Icon(Icons.category_outlined,
+                            color: categoryColor, size: 20),
                         const SizedBox(width: 8),
                         Text('Catégorie prédite',
-                            style: TextStyle(color: categoryColor, fontWeight: FontWeight.w600)),
+                            style: TextStyle(
+                                color: categoryColor,
+                                fontWeight: FontWeight.w600)),
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -458,7 +493,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(entry.key,
-                                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600)),
                                 Text('$pct%'),
                               ],
                             ),
@@ -479,31 +515,61 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 16),
             ],
-
-            _sliderField('Poids (kg)', _poids, 0, 200, _poidsTextCtrl,
+            _sliderField(
+                'Poids (kg)',
+                _poids,
+                0,
+                200,
+                _poidsTextCtrl,
                 (v) => _onSliderChanged(v, (x) => _poids = x, _poidsTextCtrl),
                 (v) => _onTextChanged(v, 0, 200, (x) => _poids = x)),
-            _sliderField('Volume (L)', _volume, 0, 200, _volumeTextCtrl,
+            _sliderField(
+                'Volume (L)',
+                _volume,
+                0,
+                200,
+                _volumeTextCtrl,
                 (v) => _onSliderChanged(v, (x) => _volume = x, _volumeTextCtrl),
                 (v) => _onTextChanged(v, 0, 200, (x) => _volume = x)),
-            _sliderField('Conductivité', _conductivite, 0, 10, _conductiviteTextCtrl,
-                (v) => _onSliderChanged(v, (x) => _conductivite = x, _conductiviteTextCtrl),
+            _sliderField(
+                'Conductivité',
+                _conductivite,
+                0,
+                10,
+                _conductiviteTextCtrl,
+                (v) => _onSliderChanged(
+                    v, (x) => _conductivite = x, _conductiviteTextCtrl),
                 (v) => _onTextChanged(v, 0, 10, (x) => _conductivite = x)),
-            _sliderField('Opacité', _opacite, 0, 1, _opaciteTextCtrl,
-                (v) => _onSliderChanged(v, (x) => _opacite = x, _opaciteTextCtrl),
+            _sliderField(
+                'Opacité',
+                _opacite,
+                0,
+                1,
+                _opaciteTextCtrl,
+                (v) =>
+                    _onSliderChanged(v, (x) => _opacite = x, _opaciteTextCtrl),
                 (v) => _onTextChanged(v, 0, 1, (x) => _opacite = x)),
-            _sliderField('Rigidité', _rigidite, 0, 10, _rigiditeTextCtrl,
-                (v) => _onSliderChanged(v, (x) => _rigidite = x, _rigiditeTextCtrl),
+            _sliderField(
+                'Rigidité',
+                _rigidite,
+                0,
+                10,
+                _rigiditeTextCtrl,
+                (v) => _onSliderChanged(
+                    v, (x) => _rigidite = x, _rigiditeTextCtrl),
                 (v) => _onTextChanged(v, 0, 10, (x) => _rigidite = x)),
-            _sliderField('Prix revente', _prix, 0, 100, _prixTextCtrl,
+            _sliderField(
+                'Prix revente',
+                _prix,
+                0,
+                100,
+                _prixTextCtrl,
                 (v) => _onSliderChanged(v, (x) => _prix = x, _prixTextCtrl),
                 (v) => _onTextChanged(v, 0, 100, (x) => _prix = x)),
-
             const SizedBox(height: 10),
             _textField(_sourceCtrl, 'Source'),
             const SizedBox(height: 10),
             _textField(_rapportCtrl, 'Rapport collecte', maxLines: 2),
-
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -608,16 +674,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     height: 40,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
-                      gradient: const LinearGradient(colors: [_deepBlue, _primaryBlue]),
+                      gradient: const LinearGradient(
+                          colors: [_deepBlue, _primaryBlue]),
                     ),
                     alignment: Alignment.center,
                     child: const Text('FR',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w800)),
                   ),
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text('EcoSmart\nOps Center',
-                        style: TextStyle(fontWeight: FontWeight.w800, height: 1.2)),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800, height: 1.2)),
                   ),
                 ],
               ),
@@ -665,7 +734,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Text(
                   'API: ${_publicHealthStatus ?? 'chargement...'}',
-                  style: const TextStyle(color: Color(0xFF1E3A8A), fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                      color: Color(0xFF1E3A8A), fontWeight: FontWeight.w700),
                 ),
               ),
               const SizedBox(height: 10),
@@ -694,7 +764,8 @@ class _HomeScreenState extends State<HomeScreen> {
           end: Alignment.bottomRight,
         ),
         boxShadow: const [
-          BoxShadow(color: Color(0x29001A6E), blurRadius: 20, offset: Offset(0, 10))
+          BoxShadow(
+              color: Color(0x29001A6E), blurRadius: 20, offset: Offset(0, 10))
         ],
       ),
       padding: const EdgeInsets.all(20),
@@ -728,7 +799,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: const Text('Actualiser'),
               ),
               const SizedBox(height: 8),
-              _badge('Dernière activité: ${summary['last_prediction_at'] ?? '-'}'),
+              _badge(
+                  'Dernière activité: ${summary['last_prediction_at'] ?? '-'}'),
             ],
           ),
         ],
@@ -742,24 +814,49 @@ class _HomeScreenState extends State<HomeScreen> {
     Map<String, dynamic> metrics,
   ) {
     final cards = [
-      _kpiCard(label: 'Prédictions', value: '${summary['predictions_count'] ?? 0}', delta: 'Total cumulé', icon: Icons.insights_outlined),
-      _kpiCard(label: 'Taux de succès', value: '${summary['success_rate'] ?? 0}%', delta: 'Requêtes 2xx', icon: Icons.verified_outlined),
-      _kpiCard(label: 'État modèle', value: ml['model_ready'] == true ? 'Prêt' : 'Indisponible', delta: 'Pipeline ML', icon: Icons.model_training_outlined),
-      _kpiCard(label: 'Accuracy', value: _shortMetric(metrics['accuracy']), delta: 'Métrique globale', icon: Icons.speed_outlined),
+      _kpiCard(
+          label: 'Prédictions',
+          value: '${summary['predictions_count'] ?? 0}',
+          delta: 'Total cumulé',
+          icon: Icons.insights_outlined),
+      _kpiCard(
+          label: 'Taux de succès',
+          value: '${summary['success_rate'] ?? 0}%',
+          delta: 'Requêtes 2xx',
+          icon: Icons.verified_outlined),
+      _kpiCard(
+          label: 'État modèle',
+          value: ml['model_ready'] == true ? 'Prêt' : 'Indisponible',
+          delta: 'Pipeline ML',
+          icon: Icons.model_training_outlined),
+      _kpiCard(
+          label: 'Accuracy',
+          value: _shortMetric(metrics['accuracy']),
+          delta: 'Métrique globale',
+          icon: Icons.speed_outlined),
     ];
 
     return LayoutBuilder(builder: (context, constraints) {
-      final perRow = constraints.maxWidth > 1100 ? 4 : constraints.maxWidth > 720 ? 2 : 1;
+      final perRow = constraints.maxWidth > 1100
+          ? 4
+          : constraints.maxWidth > 720
+              ? 2
+              : 1;
       final width = (constraints.maxWidth - (12 * (perRow - 1))) / perRow;
       return Wrap(
         spacing: 12,
         runSpacing: 12,
-        children: cards.map((card) => SizedBox(width: width, child: card)).toList(),
+        children:
+            cards.map((card) => SizedBox(width: width, child: card)).toList(),
       );
     });
   }
 
-  Widget _kpiCard({required String label, required String value, required String delta, required IconData icon}) {
+  Widget _kpiCard(
+      {required String label,
+      required String value,
+      required String delta,
+      required IconData icon}) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -768,7 +865,9 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: const Color(0xFFE8EDFF), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(
+                  color: const Color(0xFFE8EDFF),
+                  borderRadius: BorderRadius.circular(10)),
               child: Icon(icon, color: _deepBlue),
             ),
             const SizedBox(width: 12),
@@ -778,8 +877,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Text(label, style: const TextStyle(color: Color(0xFF475569))),
                   const SizedBox(height: 2),
-                  Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                  Text(delta, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                  Text(value,
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w800)),
+                  Text(delta,
+                      style: const TextStyle(
+                          color: Color(0xFF64748B), fontSize: 12)),
                 ],
               ),
             ),
@@ -796,13 +899,24 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Supervision système', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const Text('Supervision système',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            const Text('État API, disponibilité modèle et signaux.', style: TextStyle(color: Color(0xFF64748B))),
+            const Text('État API, disponibilité modèle et signaux.',
+                style: TextStyle(color: Color(0xFF64748B))),
             const SizedBox(height: 14),
-            _statusRow(title: 'API Backend', value: _publicHealthStatus ?? 'chargement...', ok: (_publicHealthStatus ?? '').toLowerCase() == 'ok'),
-            _statusRow(title: 'Modèle ML', value: ml['model_ready'] == true ? 'prêt' : 'indisponible', ok: ml['model_ready'] == true),
-            _statusRow(title: 'Accuracy', value: _shortMetric(metrics['accuracy']), ok: true),
+            _statusRow(
+                title: 'API Backend',
+                value: _publicHealthStatus ?? 'chargement...',
+                ok: (_publicHealthStatus ?? '').toLowerCase() == 'ok'),
+            _statusRow(
+                title: 'Modèle ML',
+                value: ml['model_ready'] == true ? 'prêt' : 'indisponible',
+                ok: ml['model_ready'] == true),
+            _statusRow(
+                title: 'Accuracy',
+                value: _shortMetric(metrics['accuracy']),
+                ok: true),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -814,7 +928,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Métriques modèle', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const Text('Métriques modèle',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
                   Text('Precision: ${_shortMetric(metrics['precision'])}'),
                   Text('Recall: ${_shortMetric(metrics['recall'])}'),
@@ -822,8 +937,34 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            if (_dashboardLoading) ...[const SizedBox(height: 12), const LinearProgressIndicator()],
-            if (_dashboardError != null) ...[const SizedBox(height: 10), Text(_dashboardError!, style: const TextStyle(color: Colors.red))],
+            if (_authenticated) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _retrainLoading ? null : _retrainModels,
+                  icon: const Icon(Icons.model_training_outlined),
+                  label: const Text('Reentrainer les modeles'),
+                ),
+              ),
+              if (_retrainLoading) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(),
+              ],
+              if (_retrainStatus != null) ...[
+                const SizedBox(height: 8),
+                Text(_retrainStatus!,
+                    style: const TextStyle(color: Color(0xFF1E3A8A))),
+              ],
+            ],
+            if (_dashboardLoading) ...[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator()
+            ],
+            if (_dashboardError != null) ...[
+              const SizedBox(height: 10),
+              Text(_dashboardError!, style: const TextStyle(color: Colors.red))
+            ],
           ],
         ),
       ),
@@ -837,16 +978,19 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Flux des dernières prédictions', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const Text('Flux des dernières prédictions',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            const Text('Timeline des opérations exécutées par la session.', style: TextStyle(color: Color(0xFF64748B))),
+            const Text('Timeline des opérations exécutées par la session.',
+                style: TextStyle(color: Color(0xFF64748B))),
             const SizedBox(height: 12),
             if (recent.isEmpty)
               const Text('Aucune opération récente.')
             else
               ...recent.take(12).map((item) {
                 final map = item as Map<String, dynamic>;
-                final response = map['response_payload'] as Map<String, dynamic>?;
+                final response =
+                    map['response_payload'] as Map<String, dynamic>?;
                 final ok = (map['ml_status_code'] ?? 500) < 300;
                 return Container(
                   margin: const EdgeInsets.only(bottom: 10),
@@ -863,11 +1007,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         height: 30,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: ok ? const Color(0xFFE8FAEE) : const Color(0xFFFFECEB),
+                          color: ok
+                              ? const Color(0xFFE8FAEE)
+                              : const Color(0xFFFFECEB),
                         ),
                         alignment: Alignment.center,
-                        child: Icon(ok ? Icons.check : Icons.error_outline, size: 16,
-                            color: ok ? const Color(0xFF166534) : const Color(0xFFB91C1C)),
+                        child: Icon(ok ? Icons.check : Icons.error_outline,
+                            size: 16,
+                            color: ok
+                                ? const Color(0xFF166534)
+                                : const Color(0xFFB91C1C)),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -875,14 +1024,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('Catégorie: ${response?['categorie'] ?? '-'}',
-                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
                             Text('Date: ${map['created_at'] ?? '-'}',
-                                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+                                style: const TextStyle(
+                                    fontSize: 13, color: Color(0xFF64748B))),
                           ],
                         ),
                       ),
                       Text('HTTP ${map['ml_status_code'] ?? '-'}',
-                          style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155))),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF334155))),
                     ],
                   ),
                 );
@@ -893,15 +1046,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _statusRow({required String title, required String value, required bool ok}) {
+  Widget _statusRow(
+      {required String title, required String value, required bool ok}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
           Icon(ok ? Icons.check_circle : Icons.cancel_outlined,
-              color: ok ? const Color(0xFF16A34A) : const Color(0xFFDC2626), size: 18),
+              color: ok ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+              size: 18),
           const SizedBox(width: 8),
-          Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))),
+          Expanded(
+              child: Text(title,
+                  style: const TextStyle(fontWeight: FontWeight.w600))),
           Text(value),
         ],
       ),
@@ -911,8 +1068,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _badge(String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), color: const Color(0x33214BFF)),
-      child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+      decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          color: const Color(0x33214BFF)),
+      child: Text(label,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w600)),
     );
   }
 
@@ -939,12 +1100,22 @@ class _DashboardBackground extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          Positioned(top: -120, right: -80,
-              child: Container(width: 320, height: 320,
-                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x14214BFF)))),
-          Positioned(bottom: -130, left: -70,
-              child: Container(width: 300, height: 300,
-                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x12000091)))),
+          Positioned(
+              top: -120,
+              right: -80,
+              child: Container(
+                  width: 320,
+                  height: 320,
+                  decoration: const BoxDecoration(
+                      shape: BoxShape.circle, color: Color(0x14214BFF)))),
+          Positioned(
+              bottom: -130,
+              left: -70,
+              child: Container(
+                  width: 300,
+                  height: 300,
+                  decoration: const BoxDecoration(
+                      shape: BoxShape.circle, color: Color(0x12000091)))),
         ],
       ),
     );

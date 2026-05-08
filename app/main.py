@@ -37,6 +37,16 @@ def _load(path: Path):
 BUNDLE     = _load(MODEL_PATH)
 BUNDLE_NLP = _load(MODEL_NLP_PATH)
 
+
+def _reload_models():
+    global BUNDLE, BUNDLE_NLP
+    BUNDLE = _load(MODEL_PATH)
+    BUNDLE_NLP = _load(MODEL_NLP_PATH)
+    return {
+        "model_ready": BUNDLE is not None,
+        "nlp_model_ready": BUNDLE_NLP is not None,
+    }
+
 # ── NLP ───────────────────────────────────────────────────────────────────────
 STOPWORDS_FR     = set(stopwords.words("french"))
 STOPWORDS_DOMAIN = {
@@ -138,6 +148,12 @@ def health():
         model_ready=BUNDLE is not None,
         nlp_model_ready=BUNDLE_NLP is not None,
     )
+
+
+@app.post("/reload", tags=["Monitoring"])
+def reload_models():
+    status_payload = _reload_models()
+    return {"status": "reloaded", **status_payload}
 
 @app.get("/info", response_model=InfoResponse, tags=["Monitoring"])
 def info():

@@ -1,4 +1,8 @@
 import os
+import subprocess
+import sys
+import threading
+from pathlib import Path
 
 import requests
 from django.conf import settings
@@ -19,6 +23,27 @@ from .serializers import (
 
 ML_API_BASE_URL = os.getenv("ML_API_BASE_URL", "http://127.0.0.1:8000")
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("ML_API_TIMEOUT", "15"))
+
+
+def _run_retrain_job():
+    root_dir = Path(settings.BASE_DIR).parent
+    data_path = root_dir / "notebooks" / "dataset_ProjetML_2026.csv"
+    scripts = [
+        root_dir / "scripts" / "train.py",
+        root_dir / "scripts" / "train_nlp.py",
+    ]
+
+    for script in scripts:
+        subprocess.run(
+            [sys.executable, str(script), "--data", str(data_path)],
+            cwd=root_dir,
+            check=True,
+        )
+
+    try:
+        requests.post(f"{ML_API_BASE_URL}/reload", timeout=REQUEST_TIMEOUT_SECONDS)
+    except RequestException:
+        pass
 
 
 class HealthView(APIView):
@@ -340,4 +365,25 @@ class RegisterView(APIView):
                 "username": username,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class RetrainView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if not settings.DEBUG:
+            return Response(
+                {"detail": "Retrain is disabled in production."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        thread = threading.Thread(target=_run_retrain_job, daemon=True)
+        thread.start()
+
+        return Response(
+            {
+                "detail": "Retrain started. Models will reload after training.",
+            },
+            status=status.HTTP_202_ACCEPTED,
         )

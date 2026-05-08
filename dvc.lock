@@ -1,0 +1,34 @@
+schema: '2.0'
+stages:
+  train:
+    cmd: python scripts/train.py --data notebooks/dataset_ProjetML_2026.csv
+    deps:
+    - path: notebooks/dataset_ProjetML_2026.csv
+      hash: md5
+      md5: ebca3e2a097a475cee3af2c152e90164
+      size: 2586532
+    - path: scripts/train.py
+      hash: md5
+      md5: 84347d1cf6c4baadbc79a3ee19be1b35
+      size: 7242
+    outs:
+    - path: models/pipeline.joblib
+      hash: md5
+      md5: 71a56ed1150f926e203b8fefa87fd35f
+      size: 47992
+  train_nlp:
+    cmd: python scripts/train_nlp.py --data notebooks/dataset_ProjetML_2026.csv
+    deps:
+    - path: notebooks/dataset_ProjetML_2026.csv
+      hash: md5
+      md5: ebca3e2a097a475cee3af2c152e90164
+      size: 2586532
+    - path: scripts/train_nlp.py
+      hash: md5
+      md5: f6d9563fb4e757645bc8b2cf70ca955c
+      size: 5251
+    outs:
+    - path: models/pipeline_nlp.joblib
+      hash: md5
+      md5: 93ceb2901f1a33737cf365faf8887f25
+      size: 116440
